@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "app_id": {
+      "minLength": 1,
+      "title": "App Id",
+      "type": "string"
+    },
+    "base_origin": {
+      "title": "Base Origin",
+      "type": "string"
+    },
+    "entry_route": {
+      "pattern": "^/",
+      "title": "Entry Route",
+      "type": "string"
+    },
+    "supported_version_range": {
+      "minLength": 1,
+      "title": "Supported Version Range",
+      "type": "string"
+    },
+    "tenant_override_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tenant Override Key"
+    },
+    "vendor_id": {
+      "minLength": 1,
+      "title": "Vendor Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "app_id",
+    "vendor_id",
+    "supported_version_range",
+    "base_origin",
+    "entry_route"
+  ],
+  "title": "AppMetadata",
+  "type": "object"
+}

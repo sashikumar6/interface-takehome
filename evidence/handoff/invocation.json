@@ -1,0 +1,8 @@
+{
+  "capability_id": "open_sub_account",
+  "inputs": {
+    "account_type": "holiday_savings",
+    "member_id": "***45",
+    "nickname": "Travel Fund"
+  }
+}

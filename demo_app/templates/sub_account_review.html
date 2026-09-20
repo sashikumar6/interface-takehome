@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Review Sub-account{% endblock %}
+{% block content %}
+  <h1>Review sub-account</h1>
+  <div class="alert warning" role="alert">
+    <strong>Human confirmation required</strong>
+    <span>Opening this sub-account changes demo fixture state.</span>
+  </div>
+  <table class="legacy-grid">
+    <caption>Proposed account</caption>
+    <tr><th scope="row">Synthetic member ID</th><td>{{ member.member_id }}</td></tr>
+    <tr><th scope="row">Type</th><td>{{ account_type_label }}</td></tr>
+    <tr><th scope="row">Nickname</th><td>{{ nickname }}</td></tr>
+  </table>
+  <form action="/members/{{ member.member_id }}/sub-accounts/commit" method="post">
+    <input type="hidden" name="account_type" value="{{ account_type }}">
+    <input type="hidden" name="nickname" value="{{ nickname }}">
+    <button class="danger" type="submit">Commit sub-account</button>
+  </form>
+  <p><a href="/members/{{ member.member_id }}/sub-accounts/new">Return to form</a></p>
+{% endblock %}

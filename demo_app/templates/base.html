@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Servicing Portal{% endblock %} | Heritage Community Bank</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/legacy.css') }}">
+  </head>
+  <body>
+    <table class="shell" role="presentation">
+      <tr>
+        <td class="masthead">
+          <span class="bank-name">HERITAGE COMMUNITY BANK</span>
+          <span class="system-name">Member Servicing Portal 4.2</span>
+        </td>
+      </tr>
+      <tr>
+        <td class="nav-cell">
+          <nav aria-label="Primary navigation">
+            <a href="/members/search">Member search</a>
+            <span aria-hidden="true">|</span>
+            <a href="/operator">Operator handoff</a>
+          </nav>
+        </td>
+      </tr>
+      <tr>
+        <td class="content-cell">
+          {% if fixture_notice %}
+            <aside class="fixture-notice" aria-label="Synthetic fixture notice">
+              DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic.
+            </aside>
+          {% endif %}
+          <main>{% block content %}{% endblock %}</main>
+        </td>
+      </tr>
+      <tr>
+        <td class="footer">Local training system. No authentication. No real financial data.</td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -1,0 +1,615 @@
+{
+  "$defs": {
+    "ActionType": {
+      "enum": [
+        "navigate",
+        "click",
+        "type",
+        "read",
+        "wait_for"
+      ],
+      "title": "ActionType",
+      "type": "string"
+    },
+    "AppMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "app_id": {
+          "minLength": 1,
+          "title": "App Id",
+          "type": "string"
+        },
+        "base_origin": {
+          "title": "Base Origin",
+          "type": "string"
+        },
+        "entry_route": {
+          "pattern": "^/",
+          "title": "Entry Route",
+          "type": "string"
+        },
+        "supported_version_range": {
+          "minLength": 1,
+          "title": "Supported Version Range",
+          "type": "string"
+        },
+        "tenant_override_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenant Override Key"
+        },
+        "vendor_id": {
+          "minLength": 1,
+          "title": "Vendor Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "app_id",
+        "vendor_id",
+        "supported_version_range",
+        "base_origin",
+        "entry_route"
+      ],
+      "title": "AppMetadata",
+      "type": "object"
+    },
+    "ApprovalState": {
+      "enum": [
+        "draft",
+        "approved"
+      ],
+      "title": "ApprovalState",
+      "type": "string"
+    },
+    "BusinessOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "detection_condition": {
+          "$ref": "#/$defs/Condition"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "detection_condition"
+      ],
+      "title": "BusinessOutcome",
+      "type": "object"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "description": "The only predicate language used throughout waits and classification.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ConditionKind"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Condition",
+      "type": "object"
+    },
+    "ConditionKind": {
+      "enum": [
+        "element_present",
+        "element_absent",
+        "text_matches",
+        "url_matches"
+      ],
+      "title": "ConditionKind",
+      "type": "string"
+    },
+    "InputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "$ref": "#/$defs/ValueType"
+        },
+        "validation_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validation Pattern"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "description"
+      ],
+      "title": "InputSpec",
+      "type": "object"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "parser": {
+          "anyOf": [
+            {
+              "enum": [
+                "text",
+                "integer",
+                "number",
+                "decimal",
+                "currency_decimal",
+                "boolean"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parser"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/ValueType"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "description",
+        "source"
+      ],
+      "title": "OutputSpec",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_state": {
+          "$ref": "#/$defs/ApprovalState",
+          "default": "draft"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved At"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        },
+        "compiler_version": {
+          "minLength": 1,
+          "title": "Compiler Version",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "source_discovery_run_id": {
+          "minLength": 1,
+          "title": "Source Discovery Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_discovery_run_id",
+        "compiler_version",
+        "provider",
+        "model"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "RetryPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "backoff_seconds": {
+          "default": 0,
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Backoff Seconds",
+          "type": "number"
+        },
+        "maximum_attempts": {
+          "default": 1,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Maximum Attempts",
+          "type": "integer"
+        },
+        "retryable_error_codes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Retryable Error Codes",
+          "type": "array"
+        }
+      },
+      "title": "RetryPolicy",
+      "type": "object"
+    },
+    "RiskLevel": {
+      "enum": [
+        "safe",
+        "requires_confirmation",
+        "irreversible"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    },
+    "Step": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ActionType"
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "reads_into": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reads Into"
+        },
+        "retry_policy": {
+          "$ref": "#/$defs/RetryPolicy"
+        },
+        "risk": {
+          "$ref": "#/$defs/RiskLevel",
+          "default": "safe"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "id",
+        "action"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "description": "Portable semantic intent; never a generated Playwright selector.",
+      "properties": {
+        "accessible_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessible Name"
+        },
+        "frame_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Name"
+        },
+        "frame_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Title"
+        },
+        "near_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Near Label"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "structural_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Structural Fallback"
+        },
+        "structural_surface": {
+          "anyOf": [
+            {
+              "const": "playwright",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Structural Surface"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "Target",
+      "type": "object"
+    },
+    "ValueType": {
+      "enum": [
+        "string",
+        "integer",
+        "number",
+        "decimal",
+        "boolean"
+      ],
+      "title": "ValueType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "capability_id": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "final_success_condition": {
+      "$ref": "#/$defs/Condition"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/InputSpec"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "known_business_outcomes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/BusinessOutcome"
+      },
+      "title": "Known Business Outcomes",
+      "type": "array"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/OutputSpec"
+      },
+      "title": "Outputs",
+      "type": "array"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "risk": {
+      "$ref": "#/$defs/RiskLevel"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "pattern": "^\\d+\\.\\d+$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "semantic_version": {
+      "default": "1.0.0",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "title": "Semantic Version",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/Step"
+      },
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "target_app": {
+      "$ref": "#/$defs/AppMetadata"
+    }
+  },
+  "required": [
+    "capability_id",
+    "description",
+    "risk",
+    "target_app",
+    "inputs",
+    "steps",
+    "outputs",
+    "final_success_condition",
+    "provenance"
+  ],
+  "title": "CapabilityArtifact",
+  "type": "object"
+}

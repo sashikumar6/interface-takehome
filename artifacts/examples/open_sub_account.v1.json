@@ -1,0 +1,316 @@
+{
+  "capability_id": "open_sub_account",
+  "description": "Prepare a synthetic sub-account and transfer the irreversible commit to a human.",
+  "final_success_condition": {
+    "kind": "element_present",
+    "pattern": null,
+    "target": {
+      "accessible_name": "Sub-account opened",
+      "frame_name": null,
+      "frame_title": null,
+      "near_label": null,
+      "role": "status",
+      "structural_fallback": null,
+      "structural_surface": null,
+      "text": null
+    }
+  },
+  "inputs": [
+    {
+      "description": "Synthetic five-digit member ID",
+      "name": "member_id",
+      "required": true,
+      "type": "string",
+      "validation_pattern": "^[0-9]{5}$"
+    },
+    {
+      "description": "Demo sub-account type option",
+      "name": "account_type",
+      "required": true,
+      "type": "string",
+      "validation_pattern": "^(holiday_savings|emergency_savings)$"
+    },
+    {
+      "description": "Synthetic account nickname",
+      "name": "nickname",
+      "required": true,
+      "type": "string",
+      "validation_pattern": "^.{1,40}$"
+    }
+  ],
+  "known_business_outcomes": [
+    {
+      "description": "The synthetic member fixture does not exist.",
+      "detection_condition": {
+        "kind": "text_matches",
+        "pattern": "Member not found",
+        "target": null
+      },
+      "name": "member_not_found"
+    },
+    {
+      "description": "The supplied member ID does not have the expected format.",
+      "detection_condition": {
+        "kind": "text_matches",
+        "pattern": "Invalid member ID format",
+        "target": null
+      },
+      "name": "invalid_member_id"
+    }
+  ],
+  "outputs": [],
+  "provenance": {
+    "approval_state": "approved",
+    "approved_at": "2026-01-01T00:00:00Z",
+    "approved_by": "local-demo-reviewer",
+    "compiler_version": "1.0.0",
+    "created_at": "2026-01-01T00:00:00Z",
+    "model": "reviewed-static-flow",
+    "provider": "documented-fixture",
+    "source_discovery_run_id": "documented-risk-flow-fixture"
+  },
+  "risk": "irreversible",
+  "schema_version": "1.0",
+  "semantic_version": "1.0.0",
+  "steps": [
+    {
+      "action": "navigate",
+      "checkpoint": {
+        "kind": "url_matches",
+        "pattern": "/members/search$",
+        "target": null
+      },
+      "id": "step_01_navigate",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": null,
+      "value": "http://127.0.0.1:8765/members/search"
+    },
+    {
+      "action": "type",
+      "checkpoint": null,
+      "id": "step_02_type_member",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Member ID",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "textbox",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": "{{member_id}}"
+    },
+    {
+      "action": "click",
+      "checkpoint": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "Open sub-account",
+          "frame_name": null,
+          "frame_title": null,
+          "near_label": null,
+          "role": "link",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null
+        }
+      },
+      "id": "step_03_search",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Search",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "button",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    },
+    {
+      "action": "click",
+      "checkpoint": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "Sub-account type",
+          "frame_name": null,
+          "frame_title": null,
+          "near_label": null,
+          "role": "combobox",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null
+        }
+      },
+      "id": "step_04_open_form",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Open sub-account",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "link",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    },
+    {
+      "action": "type",
+      "checkpoint": null,
+      "id": "step_05_type_account_type",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Sub-account type",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "combobox",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": "{{account_type}}"
+    },
+    {
+      "action": "type",
+      "checkpoint": null,
+      "id": "step_06_type_nickname",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Account nickname",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "textbox",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": "{{nickname}}"
+    },
+    {
+      "action": "click",
+      "checkpoint": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "Commit sub-account",
+          "frame_name": null,
+          "frame_title": null,
+          "near_label": null,
+          "role": "button",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null
+        }
+      },
+      "id": "step_07_review",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Review sub-account",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "button",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    },
+    {
+      "action": "click",
+      "checkpoint": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "Sub-account opened",
+          "frame_name": null,
+          "frame_title": null,
+          "near_label": null,
+          "role": "status",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null
+        }
+      },
+      "id": "step_08_commit",
+      "reads_into": null,
+      "retry_policy": {
+        "backoff_seconds": 0.0,
+        "maximum_attempts": 1,
+        "retryable_error_codes": []
+      },
+      "risk": "irreversible",
+      "target": {
+        "accessible_name": "Commit sub-account",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "button",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    }
+  ],
+  "target_app": {
+    "app_id": "legacy_demo_bank",
+    "base_origin": "http://127.0.0.1:8765",
+    "entry_route": "/members/search",
+    "supported_version_range": ">=1.0,<2.0",
+    "tenant_override_key": "COMPUTER_USE_DEMO_ORIGIN",
+    "vendor_id": "interface-ai-demo"
+  }
+}

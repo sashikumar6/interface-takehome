@@ -1,0 +1,6 @@
+{
+  "capability_id": "lookup_member_balance",
+  "inputs": {
+    "member_id": "***77"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "business_outcome": null,
+  "failure": null,
+  "intervention_request_id": null,
+  "outputs": {
+    "balance": "987.65"
+  },
+  "run_id": "replay-5e750ccc13ed464690faa984c071fe3b",
+  "safe_details": null,
+  "status": "success"
+}

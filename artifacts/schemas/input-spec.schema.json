@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "ValueType": {
+      "enum": [
+        "string",
+        "integer",
+        "number",
+        "decimal",
+        "boolean"
+      ],
+      "title": "ValueType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "title": "Name",
+      "type": "string"
+    },
+    "required": {
+      "default": true,
+      "title": "Required",
+      "type": "boolean"
+    },
+    "type": {
+      "$ref": "#/$defs/ValueType"
+    },
+    "validation_pattern": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Validation Pattern"
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "description"
+  ],
+  "title": "InputSpec",
+  "type": "object"
+}

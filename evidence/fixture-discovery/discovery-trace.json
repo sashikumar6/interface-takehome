@@ -1,0 +1,244 @@
+{
+  "actions": [
+    {
+      "action": "navigate",
+      "evidence_reference": {
+        "description": "redacted synthetic demo UI checkpoint",
+        "kind": "screenshot",
+        "path": "evidence/fixture-discovery/observations/observation-001.png",
+        "sha256": "57f45d88e654eeca054ff1cc37c39a437cb6e4b6ea2a6f59cf08a6228670107a"
+      },
+      "expected_postcondition": {
+        "kind": "url_matches",
+        "pattern": "/members/search$",
+        "target": null
+      },
+      "incidental": false,
+      "index": 0,
+      "observed_result": {
+        "duration_ms": 29,
+        "locator_strategy": "url",
+        "observed": "http://127.0.0.1:8765/members/search",
+        "success": true
+      },
+      "rationale": "Open the member-search entry point.",
+      "read_value": null,
+      "reads_into": null,
+      "risk": "safe",
+      "target": null,
+      "value": "http://127.0.0.1:8765/members/search"
+    },
+    {
+      "action": "type",
+      "evidence_reference": {
+        "description": "redacted synthetic demo UI checkpoint",
+        "kind": "screenshot",
+        "path": "evidence/fixture-discovery/observations/observation-002.png",
+        "sha256": "37cd0316c268ee7d546100fddf8765ec5879cb9939c3b412203038331508ff75"
+      },
+      "expected_postcondition": null,
+      "incidental": false,
+      "index": 1,
+      "observed_result": {
+        "duration_ms": 27,
+        "locator_strategy": "role+accessible_name",
+        "observed": "filled unique semantic target",
+        "success": true
+      },
+      "rationale": "Enter the supplied member reference.",
+      "read_value": null,
+      "reads_into": null,
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Member ID",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "textbox",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": "***45"
+    },
+    {
+      "action": "click",
+      "evidence_reference": {
+        "description": "redacted synthetic demo UI checkpoint",
+        "kind": "screenshot",
+        "path": "evidence/fixture-discovery/observations/observation-003.png",
+        "sha256": "94d99a9fb8850dcfe223d7b0d639613b4224ccf58319af98ab1ec198cb95e590"
+      },
+      "expected_postcondition": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "View savings account",
+          "frame_name": null,
+          "frame_title": null,
+          "near_label": null,
+          "role": "link",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null
+        }
+      },
+      "incidental": false,
+      "index": 2,
+      "observed_result": {
+        "duration_ms": 45,
+        "locator_strategy": "role+accessible_name",
+        "observed": "clicked unique semantic target",
+        "success": true
+      },
+      "rationale": "Submit the member lookup.",
+      "read_value": null,
+      "reads_into": null,
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Search",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "button",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    },
+    {
+      "action": "click",
+      "evidence_reference": {
+        "description": "redacted synthetic demo UI checkpoint",
+        "kind": "screenshot",
+        "path": "evidence/fixture-discovery/observations/observation-004.png",
+        "sha256": "69369afbdbe56f868ec4a10a2ab624b98cae53ead30f069f4a42f422a436ff20"
+      },
+      "expected_postcondition": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "Savings account balance",
+          "frame_name": "account-detail",
+          "frame_title": "Account details",
+          "near_label": null,
+          "role": "status",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null
+        }
+      },
+      "incidental": false,
+      "index": 3,
+      "observed_result": {
+        "duration_ms": 36,
+        "locator_strategy": "role+accessible_name",
+        "observed": "clicked unique semantic target",
+        "success": true
+      },
+      "rationale": "Open the savings panel in the account frame.",
+      "read_value": null,
+      "reads_into": null,
+      "risk": "safe",
+      "target": {
+        "accessible_name": "View savings account",
+        "frame_name": null,
+        "frame_title": null,
+        "near_label": null,
+        "role": "link",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    },
+    {
+      "action": "read",
+      "evidence_reference": {
+        "description": "redacted synthetic demo UI checkpoint",
+        "kind": "screenshot",
+        "path": "evidence/fixture-discovery/observations/observation-005.png",
+        "sha256": "656c3e462e35a9c1216d2c1d5f5e0ceb4644ceaba665ecc1d091213d60539281"
+      },
+      "expected_postcondition": null,
+      "incidental": false,
+      "index": 4,
+      "observed_result": {
+        "duration_ms": 3,
+        "locator_strategy": "role+accessible_name",
+        "observed": "read unique semantic target",
+        "success": true,
+        "value": "Current balance: $1234.56"
+      },
+      "rationale": "Read the observable current-balance status.",
+      "read_value": "Current balance: $1234.56",
+      "reads_into": "balance_text",
+      "risk": "safe",
+      "target": {
+        "accessible_name": "Savings account balance",
+        "frame_name": "account-detail",
+        "frame_title": "Account details",
+        "near_label": null,
+        "role": "status",
+        "structural_fallback": null,
+        "structural_surface": null,
+        "text": null
+      },
+      "value": null
+    }
+  ],
+  "completed_at": "2026-09-20 04:45:26.482533+00:00",
+  "declared_outputs": {
+    "balance_text": "Current balance: $1234.56"
+  },
+  "evidence_references": [],
+  "failure_message": null,
+  "final_status": "success",
+  "goal": {
+    "input_specs": [
+      {
+        "description": "Synthetic five-digit demo member identifier",
+        "name": "member_id",
+        "required": true,
+        "type": "string",
+        "validation_pattern": "^[0-9]{5}$"
+      }
+    ],
+    "inputs": {
+      "member_id": "***45"
+    },
+    "maximum_steps": 12,
+    "natural_language_goal": "Look up the current savings balance for the supplied member ID.",
+    "requested_outputs": [
+      {
+        "description": "Current synthetic savings balance",
+        "name": "balance",
+        "parser": "currency_decimal",
+        "source": "balance_text",
+        "type": "decimal"
+      }
+    ],
+    "target_entry_point": "http://127.0.0.1:8765/members/search",
+    "timeout_seconds": 60.0
+  },
+  "model": "scripted-test-fixture-v1",
+  "provider": "scripted-test-fixture",
+  "run_id": "discovery-e52c8b161ec547f4ad8dd38ad5da9084",
+  "schema_version": "1.0",
+  "started_at": "2026-09-20 04:45:25.871154+00:00",
+  "success_condition": {
+    "kind": "element_present",
+    "pattern": null,
+    "target": {
+      "accessible_name": "Savings account balance",
+      "frame_name": "account-detail",
+      "frame_title": "Account details",
+      "near_label": null,
+      "role": "status",
+      "structural_fallback": null,
+      "structural_surface": null,
+      "text": null
+    }
+  }
+}

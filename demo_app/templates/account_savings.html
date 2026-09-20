@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Savings Account{% endblock %}
+{% block content %}
+  <h1>Savings account</h1>
+  <table class="legacy-grid">
+    <caption>Account details for a synthetic fixture</caption>
+    <tr><th scope="row">Product</th><td>Primary savings</td></tr>
+    <tr><th scope="row">Account status</th><td>Open</td></tr>
+  </table>
+  <div class="balance" role="status" aria-label="Savings account balance">
+    <span>Current balance:</span>
+    <output>${{ "%.2f" | format(member.savings_balance) }}</output>
+  </div>
+{% endblock %}

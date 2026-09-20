@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "backoff_seconds": {
+      "default": 0,
+      "maximum": 30,
+      "minimum": 0,
+      "title": "Backoff Seconds",
+      "type": "number"
+    },
+    "maximum_attempts": {
+      "default": 1,
+      "maximum": 10,
+      "minimum": 1,
+      "title": "Maximum Attempts",
+      "type": "integer"
+    },
+    "retryable_error_codes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Retryable Error Codes",
+      "type": "array"
+    }
+  },
+  "title": "RetryPolicy",
+  "type": "object"
+}

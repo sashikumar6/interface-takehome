@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Member Search{% endblock %}
+{% block content %}
+  <h1>Member search</h1>
+  <p>Enter the five-digit ID assigned to a synthetic demo member.</p>
+  {% if outcome == "invalid_member_id" %}
+    <div class="alert error" role="alert">
+      <strong>Invalid member ID format</strong>
+      <span>Enter exactly five digits.</span>
+    </div>
+  {% endif %}
+  <form action="/members/search" method="post">
+    <table class="form-table">
+      <tr>
+        <th><label for="member-id">Member ID</label></th>
+        <td>
+          <input
+            id="member-id"
+            name="member_id"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            value="{{ entered_member_id | default('') }}"
+          >
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td><button type="submit">Search</button></td>
+      </tr>
+    </table>
+  </form>
+  <section aria-labelledby="fixture-directory-heading" class="help-box">
+    <h2 id="fixture-directory-heading">Synthetic fixture directory</h2>
+    <ul>
+      <li><code>12345</code> — normal success</li>
+      <li><code>99999</code> — member not found</li>
+      <li><code>55555</code> — permission denied</li>
+      <li><code>77777</code> — first account-panel load is transient</li>
+    </ul>
+  </section>
+{% endblock %}

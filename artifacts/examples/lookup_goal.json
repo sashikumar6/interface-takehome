@@ -1,0 +1,27 @@
+{
+  "input_specs": [
+    {
+      "description": "Synthetic five-digit demo member identifier",
+      "name": "member_id",
+      "required": true,
+      "type": "string",
+      "validation_pattern": "^[0-9]{5}$"
+    }
+  ],
+  "inputs": {
+    "member_id": "***45"
+  },
+  "maximum_steps": 12,
+  "natural_language_goal": "Look up the current savings balance for the supplied member ID.",
+  "requested_outputs": [
+    {
+      "description": "Current synthetic savings balance",
+      "name": "balance",
+      "parser": "currency_decimal",
+      "source": "balance_text",
+      "type": "decimal"
+    }
+  ],
+  "target_entry_point": "http://127.0.0.1:8765/members/search",
+  "timeout_seconds": 60.0
+}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sub-account Confirmation{% endblock %}
+{% block content %}
+  <h1>Sub-account confirmation</h1>
+  <div class="success" role="status" aria-label="Sub-account opened">
+    <strong>Sub-account opened</strong>
+    <span>The human-confirmed demo change is complete.</span>
+  </div>
+  <table class="legacy-grid">
+    <caption>Confirmation details</caption>
+    <tr><th scope="row">Confirmation</th><td>{{ opened_account.confirmation }}</td></tr>
+    <tr><th scope="row">Type</th><td>{{ account_type_label }}</td></tr>
+    <tr><th scope="row">Nickname</th><td>{{ opened_account.nickname }}</td></tr>
+  </table>
+  <p><a href="/members/{{ member.member_id }}">Return to member servicing</a></p>
+{% endblock %}

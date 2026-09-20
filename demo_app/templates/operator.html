@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Operator Handoff{% endblock %}
+{% block content %}
+  <h1>Operator handoff</h1>
+  <div class="help-box">
+    <p><strong>Local same-session workflow</strong></p>
+    <ol>
+      <li>The automation pauses on the review screen before “Commit sub-account”.</li>
+      <li>The runner transfers control of that same headed browser to the human operator.</li>
+      <li>The operator reviews and clicks the commit button, then releases control.</li>
+    </ol>
+  </div>
+  <p role="status">Committed synthetic sub-accounts this process: {{ committed_count }}</p>
+  <p>The automation runner owns control state and writes the durable redacted control-event log.</p>
+{% endblock %}

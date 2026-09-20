@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "ApprovalState": {
+      "enum": [
+        "draft",
+        "approved"
+      ],
+      "title": "ApprovalState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approval_state": {
+      "$ref": "#/$defs/ApprovalState",
+      "default": "draft"
+    },
+    "approved_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approved At"
+    },
+    "approved_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approved By"
+    },
+    "compiler_version": {
+      "minLength": 1,
+      "title": "Compiler Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "model": {
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "provider": {
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "source_discovery_run_id": {
+      "minLength": 1,
+      "title": "Source Discovery Run Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_discovery_run_id",
+    "compiler_version",
+    "provider",
+    "model"
+  ],
+  "title": "Provenance",
+  "type": "object"
+}

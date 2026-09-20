@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Member Detail{% endblock %}
+{% block content %}
+  <h1>Member servicing</h1>
+  <table class="legacy-grid">
+    <caption>Member summary</caption>
+    <tr>
+      <th scope="row">Name</th>
+      <td>{{ member.display_name }}</td>
+    </tr>
+    <tr>
+      <th scope="row">Member ID (synthetic)</th>
+      <td>{{ member.member_id }}</td>
+    </tr>
+    <tr>
+      <th scope="row">Status</th>
+      <td>Active demo fixture</td>
+    </tr>
+  </table>
+
+  <h2>Account servicing</h2>
+  <table class="legacy-grid">
+    <caption>Available actions</caption>
+    <thead>
+      <tr><th>Product</th><th>Status</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Savings</td>
+        <td>Open</td>
+        <td>
+          <a href="/members/{{ member.member_id }}/accounts/savings" target="account-detail">
+            View savings account
+          </a>
+        </td>
+      </tr>
+      <tr>
+        <td>Sub-account</td>
+        <td>Eligible</td>
+        <td><a href="/members/{{ member.member_id }}/sub-accounts/new">Open sub-account</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section aria-labelledby="account-panel-heading">
+    <h2 id="account-panel-heading">Savings account panel</h2>
+    <iframe
+      class="account-frame"
+      name="account-detail"
+      title="Account details"
+      src="/account-panel/empty"
+    ></iframe>
+  </section>
+{% endblock %}

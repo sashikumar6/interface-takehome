@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Open Sub-account{% endblock %}
+{% block content %}
+  <h1>Open sub-account</h1>
+  <p>Complete the form for synthetic member {{ member.member_id }}. Review does not commit changes.</p>
+  {% if outcome == "invalid_sub_account_form" %}
+    <div class="alert error" role="alert">
+      <strong>Check the sub-account form</strong>
+      <span>Choose an available type and enter a nickname from 1 to 40 characters.</span>
+    </div>
+  {% endif %}
+  <form action="/members/{{ member.member_id }}/sub-accounts/review" method="post">
+    <table class="form-table">
+      <tr>
+        <th><label for="account-type">Sub-account type</label></th>
+        <td>
+          <select id="account-type" name="account_type">
+            {% for value, label in account_types.items() %}
+              <option value="{{ value }}" {% if entered_account_type == value %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <th><label for="nickname">Account nickname</label></th>
+        <td>
+          <input
+            id="nickname"
+            name="nickname"
+            type="text"
+            maxlength="40"
+            required
+            value="{{ entered_nickname | default('') }}"
+          >
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td><button type="submit">Review sub-account</button></td>
+      </tr>
+    </table>
+  </form>
+{% endblock %}

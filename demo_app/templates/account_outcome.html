@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Account Result{% endblock %}
+{% block content %}
+  <h1>Account result</h1>
+  {% if outcome == "permission_denied" %}
+    <div class="alert error" role="alert"><strong>Permission denied</strong></div>
+  {% elif outcome == "member_not_found" %}
+    <div class="alert warning" role="alert"><strong>Member not found</strong></div>
+  {% else %}
+    <div class="alert error" role="alert"><strong>Invalid member ID format</strong></div>
+  {% endif %}
+{% endblock %}

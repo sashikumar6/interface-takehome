@@ -1,0 +1,54 @@
+{
+  "alerts": [
+    "Permission denied Your demo operator profile cannot view this fixture member."
+  ],
+  "digest": "e7267854e10183b5a1a92831b5b908703d01e445af71bf47934484c7fc566d54",
+  "elements": [
+    {
+      "frame": null,
+      "name": "HERITAGE COMMUNITY BANK Member Servicing Portal 4.2 Member search | Operator handoff DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic. Member lookup result Permission deni",
+      "role": "presentation",
+      "text": "HERITAGE COMMUNITY BANK Member Servicing Portal 4.2 Member search | Operator handoff DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic. Member lookup result Permission deni"
+    },
+    {
+      "frame": null,
+      "name": "Member search",
+      "role": "link",
+      "text": "Member search"
+    },
+    {
+      "frame": null,
+      "name": "Operator handoff",
+      "role": "link",
+      "text": "Operator handoff"
+    },
+    {
+      "frame": null,
+      "name": "Member lookup result",
+      "role": "heading",
+      "text": "Member lookup result"
+    },
+    {
+      "frame": null,
+      "name": "Permission denied Your demo operator profile cannot view this fixture member.",
+      "role": "alert",
+      "text": "Permission denied Your demo operator profile cannot view this fixture member."
+    },
+    {
+      "frame": null,
+      "name": "Return to member search",
+      "role": "link",
+      "text": "Return to member search"
+    }
+  ],
+  "screenshot": {
+    "description": "redacted synthetic demo UI checkpoint",
+    "kind": "screenshot",
+    "path": "evidence/replay-permission-denied/observations/observation-005.png",
+    "sha256": "5cdd8da8ff3061570ad723992a1fcae9b971373adf2c9f0bc8806275fce55b30"
+  },
+  "timestamp": "2026-09-20 04:45:39.268822+00:00",
+  "title": "Member Lookup Result | Heritage Community Bank",
+  "url": "http://127.0.0.1:8765/members/***55",
+  "visible_text": "HERITAGE COMMUNITY BANK Member Servicing Portal 4.2 Member search | Operator handoff DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic. Member lookup result Permission denied Your demo operator profile cannot view this fixture member. Return to member search Local training system. No authentication. No real financial data."
+}

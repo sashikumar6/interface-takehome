@@ -1,0 +1,65 @@
+{
+  "$defs": {
+    "ValueType": {
+      "enum": [
+        "string",
+        "integer",
+        "number",
+        "decimal",
+        "boolean"
+      ],
+      "title": "ValueType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "title": "Name",
+      "type": "string"
+    },
+    "parser": {
+      "anyOf": [
+        {
+          "enum": [
+            "text",
+            "integer",
+            "number",
+            "decimal",
+            "currency_decimal",
+            "boolean"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parser"
+    },
+    "source": {
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/ValueType"
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "description",
+    "source"
+  ],
+  "title": "OutputSpec",
+  "type": "object"
+}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Member Lookup Result{% endblock %}
+{% block content %}
+  <h1>Member lookup result</h1>
+  {% if outcome == "member_not_found" %}
+    <div class="alert warning" role="alert">
+      <strong>Member not found</strong>
+      <span>No synthetic fixture member matches that ID.</span>
+    </div>
+  {% elif outcome == "permission_denied" %}
+    <div class="alert error" role="alert">
+      <strong>Permission denied</strong>
+      <span>Your demo operator profile cannot view this fixture member.</span>
+    </div>
+  {% else %}
+    <div class="alert error" role="alert">
+      <strong>Invalid member ID format</strong>
+      <span>Member IDs contain exactly five digits.</span>
+    </div>
+  {% endif %}
+  <p><a href="/members/search">Return to member search</a></p>
+{% endblock %}
