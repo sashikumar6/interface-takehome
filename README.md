@@ -107,7 +107,7 @@ scripts/cu handoff-demo \
   --headed
 ```
 
-Expected terminal classifications are `success` with balance `1234.56`, `business_outcome` with `member_not_found`, and an escalation before the irreversible sub-account commit. During headed handoff, the human clicks **Commit sub-account** in the already-open browser and returns to the terminal; automation then re-observes and validates the same session before regaining ownership. `--automated-fixture-human --headless` exists only for deterministic testing.
+The manual `member_id=12345` replay above succeeds with balance `1234.56`. The committed `evidence/replay-success/` bundle deliberately replays a different member (`77777`) and records balance `987.65`, demonstrating that the compiled capability is parameterized rather than tied to the discovery fixture. The other expected terminal classifications are `business_outcome` with `member_not_found` and an escalation before the irreversible sub-account commit. During headed handoff, the human clicks **Commit sub-account** in the already-open browser and returns to the terminal; automation then re-observes and validates the same session before regaining ownership. `--automated-fixture-human --headless` exists only for deterministic testing.
 
 All operations are discoverable through `scripts/cu --help`. Hard failures and configuration errors return nonzero. Business outcomes are valid terminal results and return zero.
 
