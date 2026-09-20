@@ -122,3 +122,37 @@ def test_compiler_is_byte_deterministic_and_draft() -> None:
     second = compiler().compile(trace)
     assert first.stable_json() == second.stable_json()
     assert first.provenance.approval_state.value == "draft"
+
+
+def test_compiler_canonicalizes_targets_and_links_click_checkpoint_to_read() -> None:
+    goal = make_goal(member_id="12345")
+    trace = make_trace(goal, "12345")
+    data = trace.model_dump(mode="json")
+    read_action = data["actions"][1]
+    read_action["index"] = 2
+    read_action["target"]["text"] = "Current balance: $1.00"
+    read_action["target"]["near_label"] = "Savings account panel"
+    click = DiscoveryAction(
+        index=1,
+        action=ActionType.CLICK,
+        target=Target(
+            role="link",
+            accessible_name="View savings account",
+            text="View savings account",
+        ),
+        expected_postcondition=Condition(
+            kind=ConditionKind.ELEMENT_PRESENT,
+            target=Target(role="heading", accessible_name="Savings account panel"),
+        ),
+        rationale="load balance",
+        observed_result={"success": True},
+    )
+    data["actions"] = [data["actions"][0], click.model_dump(mode="json"), read_action]
+    compiled = compiler().compile(DiscoveryTrace.model_validate(data))
+    click_step = compiled.steps[1]
+    read_step = compiled.steps[2]
+    assert read_step.target is not None
+    assert read_step.target.text is None
+    assert read_step.target.near_label is None
+    assert click_step.checkpoint is not None
+    assert click_step.checkpoint.target == read_step.target

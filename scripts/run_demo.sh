@@ -8,8 +8,10 @@ export PYTHONPATH="$ROOT/src:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 MODE="genuine"
 if [[ "${1:-}" == "--fixture" ]]; then
   MODE="fixture"
+elif [[ "${1:-}" == "--reuse-discovery" ]]; then
+  MODE="reuse-genuine-discovery"
 elif [[ $# -gt 0 ]]; then
-  echo "usage: scripts/run_demo.sh [--fixture]" >&2
+  echo "usage: scripts/run_demo.sh [--fixture|--reuse-discovery]" >&2
   exit 64
 fi
 
@@ -22,9 +24,9 @@ if [[ ! -x .venv/bin/playwright ]]; then
   exit 2
 fi
 if [[ "$MODE" == "genuine" ]]; then
-  if ! .venv/bin/python -c 'from computer_use.config import Settings; settings = Settings(); raise SystemExit(0 if settings.anthropic_api_key or settings.openai_api_key else 1)'; then
-    echo "Genuine discovery is required but neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is configured." >&2
-    echo "Set one key in the environment or untracked .env, then rerun: scripts/run_demo.sh" >&2
+  if ! .venv/bin/python -c 'from computer_use.config import Settings; settings = Settings(); raise SystemExit(0 if settings.provider_key() is not None else 1)'; then
+    echo "Genuine discovery is required but the selected provider key is not configured." >&2
+    echo "Set COMPUTER_USE_PROVIDER and its matching key in the environment or untracked .env, then rerun." >&2
     echo "For an explicitly non-submission scripted exercise: scripts/run_demo.sh --fixture" >&2
     exit 2
   fi
@@ -86,10 +88,13 @@ if [[ "$MODE" == "genuine" ]]; then
     --input member_id=12345 \
     --output "$TRACE_DIR" \
     --headless
-else
+elif [[ "$MODE" == "fixture" ]]; then
   TRACE_DIR="evidence/fixture-discovery"
   reset_generated_evidence "$TRACE_DIR"
   scripts/cu fixture-discover --member-id 12345 --output "$TRACE_DIR" --headless
+else
+  TRACE_DIR="evidence/discovery"
+  .venv/bin/python -c 'from pathlib import Path; from computer_use.domain.models import DiscoveryStatus, DiscoveryTrace; trace = DiscoveryTrace.model_validate_json(Path("evidence/discovery/discovery-trace.json").read_text()); raise SystemExit(0 if trace.final_status is DiscoveryStatus.SUCCESS and trace.provider in {"openai", "anthropic"} else 1)'
 fi
 
 for directory in \

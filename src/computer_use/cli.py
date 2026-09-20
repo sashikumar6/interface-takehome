@@ -78,15 +78,15 @@ def _parse_inputs(items: list[str]) -> dict[str, str]:
 
 
 def _provider_client(settings: Settings) -> Any:
-    if settings.anthropic_api_key is not None:
+    if settings.provider == "anthropic" and settings.anthropic_api_key is not None:
         return AnthropicMessagesClient(
             api_key=settings.anthropic_api_key,
             model=os.getenv("COMPUTER_USE_ANTHROPIC_MODEL", "claude-sonnet-4-5"),
         )
-    if settings.openai_api_key is not None:
+    if settings.provider == "openai" and settings.openai_api_key is not None:
         return OpenAIResponsesClient(api_key=settings.openai_api_key, model=settings.model)
     raise typer.BadParameter(
-        "genuine discovery requires ANTHROPIC_API_KEY or OPENAI_API_KEY; no key was found"
+        f"genuine discovery selected {settings.provider!r}, but its API key was not configured"
     )
 
 

@@ -6,7 +6,7 @@ import json
 from collections import deque
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
@@ -100,6 +100,102 @@ def _output_text(payload: Mapping[str, Any]) -> str:
     raise ValueError("provider response contained no output text")
 
 
+def _openai_strict_schema(model: type[BaseModel]) -> dict[str, Any]:
+    """Return the OpenAI strict-output subset of a Pydantic JSON schema.
+
+    Strict Structured Outputs require every object property to be listed in
+    ``required`` and optional values to be represented as nullable. Pydantic
+    already emits nullable unions for these fields; this adapter removes local
+    validation-only keywords and makes every nested object closed and required.
+    Domain validation still applies after the provider response is parsed.
+    """
+
+    schema = json.loads(json.dumps(model.model_json_schema()))
+    unsupported = {
+        "default",
+        "format",
+        "maxLength",
+        "minLength",
+        "pattern",
+        "title",
+    }
+
+    def normalize(node: Any) -> None:
+        if isinstance(node, dict):
+            is_schema_node = any(
+                key in node
+                for key in ("$ref", "anyOf", "const", "enum", "items", "properties", "type")
+            )
+            if is_schema_node:
+                for key in unsupported:
+                    node.pop(key, None)
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                node["additionalProperties"] = False
+                node["required"] = list(properties)
+            for key, value in node.items():
+                if key in {"$defs", "properties"} and isinstance(value, dict):
+                    for child in value.values():
+                        normalize(child)
+                else:
+                    normalize(value)
+        elif isinstance(node, list):
+            for value in node:
+                normalize(value)
+
+    normalize(schema)
+    # Discovery intentionally exposes semantic targets only. The correlated
+    # structural fallback/surface pair cannot be represented faithfully in the
+    # strict schema subset, and allowing the model to guess CSS would weaken
+    # portability and the unique semantic resolution invariant.
+    target_schema = schema.get("$defs", {}).get("Target", {})
+    target_properties = target_schema.get("properties", {})
+    if isinstance(target_properties, dict):
+        target_properties.pop("structural_fallback", None)
+        target_properties.pop("structural_surface", None)
+        target_schema["required"] = list(target_properties)
+    return cast(dict[str, Any], schema)
+
+
+def _validate_provider_decision(payload: Any) -> LLMDecision:
+    """Canonicalize safe redundant fields before strict domain validation."""
+
+    if isinstance(payload, str):
+        data = json.loads(payload)
+    elif isinstance(payload, Mapping):
+        data = dict(payload)
+    else:
+        raise ValueError("provider decision payload must be a JSON object")
+    for field_name in ("expected_postcondition", "success_condition"):
+        condition = data.get(field_name)
+        if not isinstance(condition, dict):
+            continue
+        if condition.get("kind") in {"element_present", "element_absent"}:
+            condition["pattern"] = None
+        elif condition.get("kind") in {"text_matches", "url_matches"}:
+            condition["target"] = None
+    action = data.get("action")
+    if action != DecisionAction.DONE.value:
+        data["output_bindings"] = None
+        data["success_condition"] = None
+    if action != DecisionAction.ESCALATE.value:
+        data["escalation_reason"] = None
+    if action != DecisionAction.READ.value:
+        data["reads_into"] = None
+    input_reference = data.get("input_reference")
+    if isinstance(input_reference, str) and not input_reference.strip():
+        input_reference = None
+        data["input_reference"] = None
+    if action == DecisionAction.TYPE.value and input_reference is not None:
+        # A named input reference is safer and more reusable than a duplicate
+        # literal value. Prefer it deterministically when a provider emits both.
+        data["value"] = None
+    elif action not in {DecisionAction.NAVIGATE.value, DecisionAction.TYPE.value}:
+        data["value"] = None
+        data["input_reference"] = None
+    return LLMDecision.model_validate_json(json.dumps(data))
+
+
 class OpenAIResponsesClient:
     """Minimal OpenAI Responses adapter using JSON-schema formatted output."""
 
@@ -119,7 +215,7 @@ class OpenAIResponsesClient:
         self._transport = transport
 
     async def decide(self, *, system_prompt: str, user_prompt: str) -> LLMDecision:
-        schema = LLMDecision.model_json_schema()
+        schema = _openai_strict_schema(LLMDecision)
         request = {
             "model": self.model,
             "instructions": system_prompt,
@@ -131,7 +227,7 @@ class OpenAIResponsesClient:
                     "type": "json_schema",
                     "name": "ui_discovery_decision",
                     "description": "Exactly one constrained UI discovery action",
-                    "strict": False,
+                    "strict": True,
                     "schema": schema,
                 }
             },
@@ -148,7 +244,7 @@ class OpenAIResponsesClient:
                 "https://api.openai.com/v1/responses", json=request, headers=headers
             )
             response.raise_for_status()
-            return LLMDecision.model_validate_json(_output_text(response.json()))
+            return _validate_provider_decision(_output_text(response.json()))
 
 
 class AnthropicMessagesClient:
@@ -201,7 +297,7 @@ class AnthropicMessagesClient:
             payload = response.json()
         for item in payload.get("content", []):
             if isinstance(item, Mapping) and item.get("type") == "tool_use":
-                return LLMDecision.model_validate_json(json.dumps(item.get("input")))
+                return _validate_provider_decision(item.get("input"))
         raise ValueError("provider response contained no decision tool call")
 
 

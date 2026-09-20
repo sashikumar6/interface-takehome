@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, SecretStr
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     run_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     openai_api_key: SecretStr | None = Field(default=None, validation_alias="OPENAI_API_KEY")
+
+    @field_validator("anthropic_api_key", "openai_api_key", mode="before")
+    @classmethod
+    def blank_key_is_missing(cls, value: object) -> object | None:
+        """Treat copied empty `.env.example` placeholders as unconfigured."""
+
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
 
     @property
     def origin(self) -> str:

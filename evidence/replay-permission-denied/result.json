@@ -14,11 +14,11 @@
       "kind": "element_present",
       "pattern": null,
       "target": {
-        "accessible_name": "View savings account",
-        "frame_name": null,
+        "accessible_name": "Savings account balance",
+        "frame_name": "account-detail",
         "frame_title": null,
         "near_label": null,
-        "role": "link",
+        "role": "status",
         "structural_fallback": null,
         "structural_surface": null,
         "text": null
@@ -71,21 +71,21 @@
       "screenshot": {
         "description": "redacted synthetic demo UI checkpoint",
         "kind": "screenshot",
-        "path": "evidence/replay-permission-denied/observations/observation-005.png",
+        "path": "evidence/replay-permission-denied/observations/observation-006.png",
         "sha256": "5cdd8da8ff3061570ad723992a1fcae9b971373adf2c9f0bc8806275fce55b30"
       },
-      "timestamp": "2026-09-20T04:45:39.268822Z",
+      "timestamp": "2026-09-20T18:42:20.708378Z",
       "title": "Member Lookup Result | Heritage Community Bank",
       "url": "http://127.0.0.1:8765/members/***55",
       "visible_text": "HERITAGE COMMUNITY BANK Member Servicing Portal 4.2 Member search | Operator handoff DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic. Member lookup result Permission denied Your demo operator profile cannot view this fixture member. Return to member search Local training system. No authentication. No real financial data."
     },
     "retry_count": 0,
-    "step_id": "step_03_click",
-    "step_index": 2
+    "step_id": "step_04_click",
+    "step_index": 3
   },
   "intervention_request_id": null,
   "outputs": null,
-  "run_id": "replay-06c40d6b843e46a89c65c568a11d101e",
+  "run_id": "replay-7b7ad51e0ebb452cb0a590cb4da01e2c",
   "safe_details": null,
   "status": "hard_failure"
 }

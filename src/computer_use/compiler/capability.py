@@ -14,6 +14,8 @@ from computer_use.domain.models import (
     ApprovalState,
     BusinessOutcome,
     CapabilityArtifact,
+    Condition,
+    ConditionKind,
     DiscoveryAction,
     DiscoveryStatus,
     DiscoveryTrace,
@@ -22,6 +24,7 @@ from computer_use.domain.models import (
     RetryPolicy,
     RiskLevel,
     Step,
+    Target,
     ValueType,
 )
 
@@ -110,6 +113,28 @@ class CapabilityCompiler:
             )
         return False
 
+    @staticmethod
+    def _canonical_target(target: Target | None) -> Target | None:
+        if target is None:
+            return None
+        data = target.model_dump(mode="json")
+        if target.role and target.accessible_name:
+            # Accessible role/name is the portable identity. Observed text and
+            # neighboring labels often contain fixture-specific values.
+            data["text"] = None
+            data["near_label"] = None
+        return Target.model_validate(data)
+
+    @classmethod
+    def _canonical_condition(cls, condition: Condition | None) -> Condition | None:
+        if condition is None or condition.target is None:
+            return condition
+        data = condition.model_dump(mode="json")
+        canonical_target = cls._canonical_target(condition.target)
+        assert canonical_target is not None
+        data["target"] = canonical_target.model_dump(mode="json")
+        return Condition.model_validate(data)
+
     def compile(self, trace: DiscoveryTrace, goal: GoalSpec | None = None) -> CapabilityArtifact:
         """Return byte-stable output for identical trace, goal, and compiler config."""
 
@@ -126,20 +151,29 @@ class CapabilityCompiler:
             )
 
         steps: list[Step] = []
-        for action in trace.actions:
-            if not self._include_action(action):
-                continue
+        included_actions = [action for action in trace.actions if self._include_action(action)]
+        for action_index, action in enumerate(included_actions):
             value = action.value
             if value is not None and action.action is ActionType.TYPE:
                 value = self._bind_value(value, selected_goal)
+            target = self._canonical_target(action.target)
+            checkpoint = self._canonical_condition(action.expected_postcondition)
+            if action.action is ActionType.CLICK and action_index + 1 < len(included_actions):
+                following = included_actions[action_index + 1]
+                following_target = self._canonical_target(following.target)
+                if following.action is ActionType.READ and following_target is not None:
+                    checkpoint = Condition(
+                        kind=ConditionKind.ELEMENT_PRESENT,
+                        target=following_target,
+                    )
             steps.append(
                 Step(
                     id=f"step_{len(steps) + 1:02d}_{action.action.value}",
                     action=action.action,
-                    target=action.target,
+                    target=target,
                     value=value,
                     retry_policy=self.config.default_retry_policy,
-                    checkpoint=action.expected_postcondition,
+                    checkpoint=checkpoint,
                     reads_into=action.reads_into,
                     risk=action.risk,
                 )
@@ -179,7 +213,7 @@ class CapabilityCompiler:
             steps=tuple(steps),
             known_business_outcomes=self.config.known_business_outcomes,
             outputs=selected_goal.requested_outputs,
-            final_success_condition=trace.success_condition,
+            final_success_condition=self._canonical_condition(trace.success_condition),
             provenance=Provenance(
                 source_discovery_run_id=trace.run_id,
                 compiler_version=self.config.compiler_version,

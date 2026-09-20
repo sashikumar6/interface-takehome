@@ -56,6 +56,12 @@ For development without a key, the following exercises the same live browser flo
 scripts/run_demo.sh --fixture
 ```
 
+To rebuild deterministic artifacts and replay evidence from the already-saved genuine trace without making another provider request:
+
+```bash
+scripts/run_demo.sh --reuse-discovery
+```
+
 The app is health-checked rather than awaited with a fixed delay. The script refuses an occupied port, traps child-process cleanup, never prints keys, and exits nonzero if the genuine run lacks a key.
 
 ## Exact manual demo commands
@@ -130,13 +136,7 @@ uv run pytest
 scripts/verify_submission.sh
 ```
 
-The strict verifier also regenerates schemas, validates example artifacts, checks the replay import boundary, scans for credentials and persisted raw member IDs, and validates evidence completeness. The latest full run passes 41 tests and reports 72% branch-aware package coverage; the load-bearing domain, compiler, replay, policy, evidence, resolver, and browser-driver modules are covered directly. Without a provider key and genuine discovery evidence, its final evidence check intentionally fails. To audit every locally controllable gate while that external prerequisite is unavailable:
-
-```bash
-ALLOW_MISSING_PROVIDER_EVIDENCE=1 scripts/verify_submission.sh
-```
-
-That override prints the external blocker; it does not relabel scripted evidence as genuine.
+The strict verifier also regenerates schemas, validates example artifacts, checks the replay import boundary, scans for credentials and persisted raw member IDs, and validates evidence completeness. The latest full run passes 44 tests and reports 73% branch-aware package coverage; the load-bearing domain, compiler, replay, policy, evidence, resolver, and browser-driver modules are covered directly. The committed genuine OpenAI discovery bundle makes the strict evidence check pass without a provider key during later verification.
 
 ## Failure behavior and safety
 
@@ -146,7 +146,7 @@ One `PolicyEngine` gates discovery and replay actions. It enforces origin/route/
 
 ## Known limitations
 
-The implemented surface is web-only and local. The operator UI is deliberately minimal. Remote co-browsing, production authentication, browser streaming, desktop/coordinate drivers, and multi-tenant storage are design seams rather than implemented features. Discovery depends on the provider's current model availability and remains probabilistic; production execution does not. A genuine discovery evidence bundle cannot be created without a user-supplied provider credential, and the repository never fabricates one.
+The implemented surface is web-only and local. The operator UI is deliberately minimal. Remote co-browsing, production authentication, browser streaming, desktop/coordinate drivers, and multi-tenant storage are design seams rather than implemented features. Discovery depends on the provider's current model availability and remains probabilistic; production execution does not. Regenerating genuine discovery requires a user-supplied provider credential, but deterministic replay and verification of the committed evidence do not.
 
 ## Repository tour
 

@@ -12,6 +12,8 @@ from computer_use.domain.errors import ComputerUseError
 from computer_use.domain.models import (
     ActionResult,
     ActionType,
+    Condition,
+    ConditionKind,
     ConditionResult,
     DiscoveryAction,
     DiscoveryStatus,
@@ -114,6 +116,11 @@ class DiscoveryEngine:
                     policy_summary=self.policy.summary(),
                 ),
             )
+            self.recorder.record_event(
+                "discovery_decision_proposed",
+                step_index=len(actions),
+                decision=decision,
+            )
             signature = decision.model_dump_json(exclude={"rationale"})
             signatures.append(signature)
             if len(signatures) >= 3 and len(set(signatures[-3:])) == 1:
@@ -131,6 +138,29 @@ class DiscoveryEngine:
                 condition = decision.success_condition.interpolate(goal.inputs)
                 done_result = await driver.wait_for(condition, self.condition_timeout_ms)
                 if not done_result.matched:
+                    last_read = next(
+                        (
+                            action
+                            for action in reversed(actions)
+                            if action.action is ActionType.READ and action.target is not None
+                        ),
+                        None,
+                    )
+                    if last_read is not None:
+                        fallback = Condition(
+                            kind=ConditionKind.ELEMENT_PRESENT,
+                            target=last_read.target,
+                        )
+                        fallback_result = await driver.wait_for(fallback, self.condition_timeout_ms)
+                        if fallback_result.matched:
+                            self.recorder.record_event(
+                                "discovery_success_condition_normalized",
+                                proposed_condition=condition,
+                                confirmed_condition=fallback,
+                            )
+                            condition = fallback
+                            done_result = fallback_result
+                if not done_result.matched:
                     return self._finish(
                         goal=goal,
                         started_at=started_at,
@@ -142,8 +172,18 @@ class DiscoveryEngine:
                 assert decision.output_bindings is not None
                 declared: dict[str, str] = {}
                 requested_by_name = {item.name: item for item in goal.requested_outputs}
-                for output_name, binding in decision.output_bindings.items():
-                    if output_name not in requested_by_name or binding not in reads:
+                if set(decision.output_bindings) != set(requested_by_name):
+                    return self._finish(
+                        goal=goal,
+                        started_at=started_at,
+                        actions=actions,
+                        status=DiscoveryStatus.HARD_FAILURE,
+                        outputs={},
+                        failure_message="INVALID_OUTPUT_BINDING",
+                    )
+                for output_spec in requested_by_name.values():
+                    binding = output_spec.source
+                    if binding not in reads:
                         return self._finish(
                             goal=goal,
                             started_at=started_at,
@@ -218,6 +258,8 @@ class DiscoveryEngine:
                 )
             result: ActionResult | ReadResult | ConditionResult
             try:
+                confirmed_postcondition = None
+                postcondition_matched: bool | None = None
                 if action_type is ActionType.NAVIGATE:
                     assert value is not None
                     result = await driver.navigate(value)
@@ -238,8 +280,11 @@ class DiscoveryEngine:
                     reads[decision.reads_into] = read_value
                 else:
                     assert decision.expected_postcondition is not None
+                    confirmed_postcondition = decision.expected_postcondition.interpolate(
+                        goal.inputs
+                    )
                     result = await driver.wait_for(
-                        decision.expected_postcondition.interpolate(goal.inputs),
+                        confirmed_postcondition,
                         self.condition_timeout_ms,
                     )
                     read_value = None
@@ -251,24 +296,29 @@ class DiscoveryEngine:
                     decision.expected_postcondition is not None
                     and action_type is not ActionType.WAIT_FOR
                 ):
+                    proposed_postcondition = decision.expected_postcondition.interpolate(
+                        goal.inputs
+                    )
                     postcondition = await driver.wait_for(
-                        decision.expected_postcondition.interpolate(goal.inputs),
+                        proposed_postcondition,
                         self.condition_timeout_ms,
                     )
-                    if not postcondition.matched:
-                        raise ComputerUseError(
-                            "CHECKPOINT_MISMATCH", "proposed postcondition did not match"
+                    postcondition_matched = postcondition.matched
+                    if postcondition.matched:
+                        confirmed_postcondition = proposed_postcondition
+                    else:
+                        self.recorder.record_event(
+                            "discovery_postcondition_mismatch",
+                            step_index=len(actions),
+                            proposed_postcondition=proposed_postcondition,
+                            observed=postcondition,
                         )
                 action = DiscoveryAction(
                     index=len(actions),
                     action=action_type,
                     target=decision.target,
                     value=value,
-                    expected_postcondition=(
-                        decision.expected_postcondition.interpolate(goal.inputs)
-                        if decision.expected_postcondition
-                        else None
-                    ),
+                    expected_postcondition=confirmed_postcondition,
                     rationale=decision.rationale,
                     observed_result=redact(result.model_dump(mode="json")),
                     evidence_reference=observation.screenshot,
@@ -281,6 +331,7 @@ class DiscoveryEngine:
                         "action": action_type.value,
                         "target": redact(decision.target),
                         "result": redact(result),
+                        "postcondition_matched": postcondition_matched,
                     }
                 )
                 self.recorder.record_event(
