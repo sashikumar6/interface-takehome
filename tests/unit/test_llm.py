@@ -83,6 +83,8 @@ async def test_openai_adapter_parses_stored_structured_fixture_without_secret_lo
                 assert definition["required"] == list(definition["properties"])
                 assert definition["additionalProperties"] is False
         target_properties = schema["$defs"]["Target"]["properties"]
+        assert "within" in target_properties
+        assert "ordinal" in target_properties
         assert "structural_fallback" not in target_properties
         assert "structural_surface" not in target_properties
         return httpx.Response(

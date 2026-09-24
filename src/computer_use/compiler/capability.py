@@ -19,6 +19,7 @@ from computer_use.domain.models import (
     DiscoveryAction,
     DiscoveryStatus,
     DiscoveryTrace,
+    FailureOutcome,
     GoalSpec,
     Provenance,
     RetryPolicy,
@@ -43,12 +44,19 @@ class CompilerConfig:
     default_retry_policy: RetryPolicy = field(
         default_factory=lambda: RetryPolicy(
             maximum_attempts=2,
-            backoff_seconds=0,
-            retryable_error_codes=("CHECKPOINT_MISMATCH", "TARGET_NOT_FOUND", "NAVIGATION_FAILED"),
+            backoff_seconds=0.25,
+            retryable_error_codes=(
+                "CHECKPOINT_MISMATCH",
+                "TARGET_NOT_FOUND",
+                "NAVIGATION_FAILED",
+                "SURFACE_EXECUTION_FAILED",
+            ),
         )
     )
+    default_step_timeout_ms: int = 3_000
     risk: RiskLevel = RiskLevel.SAFE
     known_business_outcomes: tuple[BusinessOutcome, ...] = ()
+    known_failure_outcomes: tuple[FailureOutcome, ...] = ()
 
 
 def _normalized(value: Any, value_type: ValueType) -> tuple[str, Any]:
@@ -173,6 +181,7 @@ class CapabilityCompiler:
                     target=target,
                     value=value,
                     retry_policy=self.config.default_retry_policy,
+                    timeout_ms=self.config.default_step_timeout_ms,
                     checkpoint=checkpoint,
                     reads_into=action.reads_into,
                     risk=action.risk,
@@ -207,11 +216,11 @@ class CapabilityCompiler:
                 supported_version_range=self.config.supported_version_range,
                 base_origin=origin,
                 entry_route=route,
-                tenant_override_key="COMPUTER_USE_DEMO_ORIGIN",
             ),
             inputs=selected_goal.input_specs,
             steps=tuple(steps),
             known_business_outcomes=self.config.known_business_outcomes,
+            known_failure_outcomes=self.config.known_failure_outcomes,
             outputs=selected_goal.requested_outputs,
             final_success_condition=self._canonical_condition(trace.success_condition),
             provenance=Provenance(

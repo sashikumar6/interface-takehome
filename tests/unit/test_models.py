@@ -8,10 +8,14 @@ from computer_use.domain.models import (
     Condition,
     ConditionKind,
     FailureDetail,
+    OutputSpec,
     ReplayResult,
     ReplayStatus,
+    RiskLevel,
     Step,
     Target,
+    TargetScope,
+    ValueType,
 )
 
 
@@ -46,6 +50,29 @@ def test_target_requires_portable_strategy_and_normalizes_text() -> None:
         Target(structural_fallback="#submit")
 
 
+def test_target_supports_explicit_relational_scope_and_ordinal() -> None:
+    target = Target(
+        role="button",
+        accessible_name="Open",
+        within=TargetScope(role="row", text="Member {{member_id}}"),
+        ordinal=1,
+    ).interpolate({"member_id": "12345"})
+    assert target.within is not None
+    assert target.within.text == "Member 12345"
+    assert target.ordinal == 1
+
+
+def test_output_parser_must_match_declared_type() -> None:
+    with pytest.raises(ValidationError, match="incompatible"):
+        OutputSpec(
+            name="balance",
+            type=ValueType.DECIMAL,
+            description="Balance",
+            source="balance_text",
+            parser="boolean",
+        )
+
+
 def test_step_action_invariants() -> None:
     with pytest.raises(ValidationError):
         Step(id="type_member", action=ActionType.TYPE, target=Target(text="Member ID"))
@@ -54,6 +81,13 @@ def test_step_action_invariants() -> None:
             id="read_balance",
             action=ActionType.READ,
             target=Target(role="status", accessible_name="Savings account balance"),
+        )
+    with pytest.raises(ValidationError, match="irreversible step requires"):
+        Step(
+            id="commit",
+            action=ActionType.CLICK,
+            target=Target(role="button", accessible_name="Commit"),
+            risk=RiskLevel.IRREVERSIBLE,
         )
 
 

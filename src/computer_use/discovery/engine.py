@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from time import monotonic
 from typing import Any
@@ -46,11 +47,37 @@ class DiscoveryEngine:
         policy: PolicyEngine,
         recorder: EvidenceRecorder,
         condition_timeout_ms: int = 2_500,
+        provider_attempts: int = 3,
+        provider_backoff_seconds: float = 0.5,
     ) -> None:
         self.client = client
         self.policy = policy
         self.recorder = recorder
         self.condition_timeout_ms = condition_timeout_ms
+        self.provider_attempts = provider_attempts
+        self.provider_backoff_seconds = provider_backoff_seconds
+
+    async def _decide(self, *, system_prompt: str, user_prompt: str) -> Any:
+        """Retry transient provider/schema failures and preserve an evidence trail."""
+
+        last_error: Exception | None = None
+        for attempt in range(1, self.provider_attempts + 1):
+            try:
+                return await self.client.decide(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                )
+            except Exception as error:
+                last_error = error
+                self.recorder.record_event(
+                    "discovery_provider_retry",
+                    attempt=attempt,
+                    error=redact_exception(error),
+                )
+                if attempt < self.provider_attempts:
+                    await asyncio.sleep(self.provider_backoff_seconds * attempt)
+        assert last_error is not None
+        raise last_error
 
     def _finish(
         self,
@@ -104,18 +131,38 @@ class DiscoveryEngine:
                     outputs={},
                     failure_message="RUN_TIMEOUT",
                 )
-            observation = await driver.observe()
+            try:
+                observation = await driver.observe()
+            except Exception as error:
+                return self._finish(
+                    goal=goal,
+                    started_at=started_at,
+                    actions=actions,
+                    status=DiscoveryStatus.ESCALATED,
+                    outputs={},
+                    failure_message=redact_exception(error),
+                )
             safe_goal = goal.model_dump(mode="json")
             safe_goal["inputs"] = {name: "[AVAILABLE_BY_REFERENCE]" for name in goal.inputs}
-            decision = await self.client.decide(
-                system_prompt=SYSTEM_PROMPT,
-                user_prompt=build_decision_input(
-                    goal=safe_goal,
-                    observation=observation.model_dump(mode="json"),
-                    history=history,
-                    policy_summary=self.policy.summary(),
-                ),
-            )
+            try:
+                decision = await self._decide(
+                    system_prompt=SYSTEM_PROMPT,
+                    user_prompt=build_decision_input(
+                        goal=safe_goal,
+                        observation=observation.model_dump(mode="json"),
+                        history=history,
+                        policy_summary=self.policy.summary(),
+                    ),
+                )
+            except Exception as error:
+                return self._finish(
+                    goal=goal,
+                    started_at=started_at,
+                    actions=actions,
+                    status=DiscoveryStatus.ESCALATED,
+                    outputs={},
+                    failure_message=redact_exception(error),
+                )
             self.recorder.record_event(
                 "discovery_decision_proposed",
                 step_index=len(actions),
@@ -342,12 +389,12 @@ class DiscoveryEngine:
                     rationale=decision.rationale,
                     result=result,
                 )
-            except (ComputerUseError, ValueError) as error:
+            except Exception as error:
                 return self._finish(
                     goal=goal,
                     started_at=started_at,
                     actions=actions,
-                    status=DiscoveryStatus.HARD_FAILURE,
+                    status=DiscoveryStatus.ESCALATED,
                     outputs={},
                     failure_message=redact_exception(error),
                 )

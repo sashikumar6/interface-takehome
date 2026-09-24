@@ -62,7 +62,7 @@ class PlaywrightSurfaceDriver:
         self._observation_directory = observation_directory
         self._redactor = redactor
         self._observation_count = 0
-        self._unexpected_dialog: str | None = None
+        self._unexpected_dialogs: list[str] = []
         page.on("dialog", self._on_dialog)
 
     @classmethod
@@ -87,21 +87,39 @@ class PlaywrightSurfaceDriver:
         )
 
     def _on_dialog(self, dialog: Dialog) -> None:
-        self._unexpected_dialog = self._redactor.text(dialog.message)
-        task = asyncio.create_task(dialog.dismiss())
-        task.add_done_callback(lambda _task: None)
+        # Dialog acceptance or dismissal is an action with business impact. Keep
+        # the dialog open and surface it to the engine for policy/human review.
+        self._unexpected_dialogs.append(self._redactor.text(dialog.message))
+        self._unexpected_dialogs[:] = self._unexpected_dialogs[-10:]
 
     def _check_session(self) -> None:
         if self._page.is_closed():
             raise SurfaceExecutionError("SESSION_EXPIRED", "browser page is closed")
-        if self._unexpected_dialog is not None:
-            message = self._unexpected_dialog
-            self._unexpected_dialog = None
+        if self._unexpected_dialogs:
             raise SurfaceExecutionError(
                 "UNEXPECTED_DIALOG",
                 "unexpected dialog interrupted the browser",
-                {"message": message},
+                {"messages": tuple(self._unexpected_dialogs)},
             )
+
+    def _execution_error(self, exc: PlaywrightError, *, operation: str) -> SurfaceExecutionError:
+        if self._page.is_closed():
+            return SurfaceExecutionError("SESSION_EXPIRED", "browser page is closed")
+        message = self._redactor.exception(exc)
+        normalized = str(exc).casefold()
+        if "not attached" in normalized or "detached" in normalized:
+            return SurfaceExecutionError(
+                "TARGET_DETACHED", f"target detached during {operation}: {message}"
+            )
+        return SurfaceExecutionError(
+            "SURFACE_EXECUTION_FAILED", f"browser {operation} failed: {message}"
+        )
+
+    async def current_url(self) -> str:
+        """Return the current redacted URL without observing or taking a screenshot."""
+
+        self._check_session()
+        return self._redactor.text(self._page.url)
 
     @staticmethod
     def _duration(started: float) -> int:
@@ -149,7 +167,7 @@ class PlaywrightSurfaceDriver:
         except PlaywrightTimeoutError as exc:
             raise SurfaceExecutionError("TARGET_NOT_FOUND", "target was not actionable") from exc
         except PlaywrightError as exc:
-            raise SurfaceExecutionError("SESSION_EXPIRED", self._redactor.exception(exc)) from exc
+            raise self._execution_error(exc, operation="click") from exc
 
     async def type(self, target: Target, text: str) -> ActionResult:
         self._check_session()
@@ -169,6 +187,8 @@ class PlaywrightSurfaceDriver:
             )
         except PlaywrightTimeoutError as exc:
             raise SurfaceExecutionError("TARGET_NOT_FOUND", "target was not editable") from exc
+        except PlaywrightError as exc:
+            raise self._execution_error(exc, operation="type") from exc
 
     async def read(self, target: Target) -> ReadResult:
         self._check_session()
@@ -185,6 +205,8 @@ class PlaywrightSurfaceDriver:
             )
         except PlaywrightTimeoutError as exc:
             raise SurfaceExecutionError("TARGET_NOT_FOUND", "target could not be read") from exc
+        except PlaywrightError as exc:
+            raise self._execution_error(exc, operation="read") from exc
 
     async def wait_for(self, condition: Condition, timeout_ms: int) -> ConditionResult:
         self._check_session()
@@ -233,6 +255,8 @@ class PlaywrightSurfaceDriver:
                 observed=self._redactor.exception(exc),
                 duration_ms=self._duration(started),
             )
+        except PlaywrightError as exc:
+            raise self._execution_error(exc, operation="condition wait") from exc
 
     async def screenshot(self, destination: Path) -> EvidenceRef:
         self._check_session()
@@ -284,7 +308,10 @@ class PlaywrightSurfaceDriver:
     async def observe(self) -> Observation:
         self._check_session()
         self._observation_count += 1
-        visible = await self._page.locator("body").inner_text(timeout=5_000)
+        try:
+            visible = await self._page.locator("body").inner_text(timeout=5_000)
+        except PlaywrightError as exc:
+            raise self._execution_error(exc, operation="observation") from exc
         visible = self._redactor.text(" ".join(visible.split())[:8_000])
         alerts: list[str] = []
         elements: list[ActionableElement] = []
@@ -326,7 +353,10 @@ class PlaywrightSurfaceDriver:
                 self._observation_directory / f"observation-{self._observation_count:03d}.png"
             )
         url = self._redactor.text(self._page.url)
-        title = self._redactor.text(await self._page.title())
+        try:
+            title = self._redactor.text(await self._page.title())
+        except PlaywrightError as exc:
+            raise self._execution_error(exc, operation="observation") from exc
         digest_payload = f"{url}\n{title}\n{visible}".encode()
         return Observation(
             url=url,

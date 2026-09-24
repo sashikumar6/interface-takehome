@@ -30,11 +30,13 @@ from computer_use.domain.models import (
 )
 from computer_use.examples import (
     lookup_business_outcomes,
+    lookup_failure_outcomes,
     lookup_goal,
     lookup_scripted_decisions,
     open_sub_account_artifact,
 )
 from computer_use.observability.evidence import EvidenceRecorder
+from computer_use.replay.catalog import FileCapabilityCatalog
 from computer_use.replay.engine import ReplayEngine
 from computer_use.safety.policy import PolicyEngine
 from computer_use.surfaces.playwright import PlaywrightSurfaceDriver
@@ -120,7 +122,11 @@ async def _discover(
     try:
         engine = DiscoveryEngine(
             client=client,
-            policy=PolicyEngine.development(settings.origin),
+            policy=PolicyEngine.development(
+                settings.origin,
+                max_steps=settings.max_steps,
+                run_timeout_seconds=settings.run_timeout_seconds,
+            ),
             recorder=recorder,
         )
         return await engine.run(goal, driver)
@@ -194,6 +200,9 @@ def compile_capability(
         known_business_outcomes=(
             lookup_business_outcomes() if capability_id == "lookup_member_balance" else ()
         ),
+        known_failure_outcomes=(
+            lookup_failure_outcomes() if capability_id == "lookup_member_balance" else ()
+        ),
     )
     artifact = CapabilityCompiler(config).compile(trace, trace.goal)
     _write_model(output, artifact)
@@ -236,7 +245,11 @@ async def _replay(
         observation_directory=evidence_dir / "observations",
     )
     engine = ReplayEngine(
-        policy=PolicyEngine.development(artifact.target_app.base_origin),
+        policy=PolicyEngine.development(
+            artifact.target_app.base_origin,
+            max_steps=settings.max_steps,
+            run_timeout_seconds=settings.run_timeout_seconds,
+        ),
         recorder=recorder,
     )
     try:
@@ -246,6 +259,20 @@ async def _replay(
             driver,
             development_override=development_override,
         )
+        if result.status.value == "escalated" and headed and engine.handoff_manager is not None:
+            manager = engine.handoff_manager
+            manager.take_control("local-operator")
+            typer.echo(
+                "Human now owns the live browser. Complete the requested step, then return here."
+            )
+            await asyncio.to_thread(input, "Press Enter to release control back to automation: ")
+            compatible = await manager.release_and_resume(
+                driver,
+                operator_id="local-operator",
+                resume_condition=engine.resume_condition,
+            )
+            if compatible:
+                result = await engine.resume(driver)
         return result, engine
     finally:
         await driver.close()
@@ -253,7 +280,12 @@ async def _replay(
 
 @app.command()
 def replay(
-    artifact_path: Annotated[Path, typer.Option("--artifact", exists=True, dir_okay=False)],
+    artifact_path: Annotated[
+        Path | None, typer.Option("--artifact", exists=True, dir_okay=False)
+    ] = None,
+    capability_id: str | None = typer.Option(None, "--capability-id"),
+    version: str | None = typer.Option(None, "--version"),
+    catalog_dir: Path = typer.Option(DEFAULT_EXAMPLES_DIR, "--catalog"),
     input_values: Annotated[list[str] | None, typer.Option("--input")] = None,
     evidence_dir: Path = typer.Option(DEFAULT_REPLAY_DIR),
     headed: bool = typer.Option(False, "--headed/--headless"),
@@ -261,7 +293,13 @@ def replay(
 ) -> None:
     """Replay an approved artifact with zero LLM decisions or imports."""
 
-    artifact = _load_model(artifact_path, CapabilityArtifact)
+    if (artifact_path is None) == (capability_id is None):
+        raise typer.BadParameter("provide exactly one of --artifact or --capability-id")
+    artifact = (
+        _load_model(artifact_path, CapabilityArtifact)
+        if artifact_path is not None
+        else FileCapabilityCatalog(catalog_dir).get(capability_id or "", version)
+    )
     result, _ = asyncio.run(
         _replay(
             artifact=artifact,
@@ -295,7 +333,11 @@ def handoff_demo(
             observation_directory=evidence_dir / "observations",
         )
         engine = ReplayEngine(
-            policy=PolicyEngine.development(artifact.target_app.base_origin),
+            policy=PolicyEngine.development(
+                artifact.target_app.base_origin,
+                max_steps=settings.max_steps,
+                run_timeout_seconds=settings.run_timeout_seconds,
+            ),
             recorder=recorder,
         )
         try:
@@ -329,11 +371,14 @@ def handoff_demo(
             compatible = await manager.release_and_resume(
                 driver,
                 operator_id="fixture-operator" if automated_fixture_human else "local-operator",
-                resume_condition=artifact.final_success_condition,
+                resume_condition=engine.resume_condition,
             )
             if not compatible:
                 raise RuntimeError("resume validation found an incompatible browser state")
-            typer.echo("handoff complete: same session validated and automation control restored")
+            final = await engine.resume(driver)
+            if final.status.value != "success":
+                raise RuntimeError(f"resumed replay ended as {final.status.value}")
+            typer.echo("handoff complete: resumed replay finished successfully")
         finally:
             await driver.close()
 

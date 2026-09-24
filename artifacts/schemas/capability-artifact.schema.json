@@ -33,18 +33,6 @@
           "title": "Supported Version Range",
           "type": "string"
         },
-        "tenant_override_key": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Tenant Override Key"
-        },
         "vendor_id": {
           "minLength": 1,
           "title": "Vendor Id",
@@ -141,6 +129,39 @@
       ],
       "title": "ConditionKind",
       "type": "string"
+    },
+    "FailureOutcome": {
+      "additionalProperties": false,
+      "description": "Artifact-declared UI state that maps to a typed hard-failure code.",
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "detection_condition": {
+          "$ref": "#/$defs/Condition"
+        },
+        "error_code": {
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "title": "Error Code",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "error_code",
+        "description",
+        "detection_condition"
+      ],
+      "title": "FailureOutcome",
+      "type": "object"
     },
     "InputSpec": {
       "additionalProperties": false,
@@ -364,6 +385,31 @@
           "title": "Id",
           "type": "string"
         },
+        "idempotency_key": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Idempotency Key"
+        },
+        "precondition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "reads_into": {
           "anyOf": [
             {
@@ -393,6 +439,13 @@
             }
           ],
           "default": null
+        },
+        "timeout_ms": {
+          "default": 5000,
+          "maximum": 120000,
+          "minimum": 100,
+          "title": "Timeout Ms",
+          "type": "integer"
         },
         "value": {
           "anyOf": [
@@ -466,6 +519,19 @@
           "default": null,
           "title": "Near Label"
         },
+        "ordinal": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ordinal"
+        },
         "role": {
           "anyOf": [
             {
@@ -514,9 +580,64 @@
           ],
           "default": null,
           "title": "Text"
+        },
+        "within": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "Target",
+      "type": "object"
+    },
+    "TargetScope": {
+      "additionalProperties": false,
+      "description": "A semantic container used to disambiguate repeated controls.",
+      "properties": {
+        "accessible_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessible Name"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "TargetScope",
       "type": "object"
     },
     "ValueType": {
@@ -560,6 +681,14 @@
         "$ref": "#/$defs/BusinessOutcome"
       },
       "title": "Known Business Outcomes",
+      "type": "array"
+    },
+    "known_failure_outcomes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FailureOutcome"
+      },
+      "title": "Known Failure Outcomes",
       "type": "array"
     },
     "outputs": {

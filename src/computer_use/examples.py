@@ -17,6 +17,7 @@ from computer_use.domain.models import (
     DiscoveryAction,
     DiscoveryStatus,
     DiscoveryTrace,
+    FailureOutcome,
     GoalSpec,
     InputSpec,
     OutputSpec,
@@ -129,12 +130,26 @@ def lookup_business_outcomes() -> tuple[BusinessOutcome, ...]:
     )
 
 
+def lookup_failure_outcomes() -> tuple[FailureOutcome, ...]:
+    return (
+        FailureOutcome(
+            name="permission_denied",
+            error_code="PERMISSION_DENIED",
+            description="The operator is not authorized to view this synthetic member.",
+            detection_condition=Condition(
+                kind=ConditionKind.TEXT_MATCHES, pattern=r"Permission denied"
+            ),
+        ),
+    )
+
+
 def lookup_compiler() -> CapabilityCompiler:
     return CapabilityCompiler(
         CompilerConfig(
             capability_id="lookup_member_balance",
             description="Look up a synthetic member and return the current savings balance.",
             known_business_outcomes=lookup_business_outcomes(),
+            known_failure_outcomes=lookup_failure_outcomes(),
         )
     )
 
@@ -155,7 +170,6 @@ def open_sub_account_artifact(origin: str, *, approved: bool = False) -> Capabil
             supported_version_range=">=1.0,<2.0",
             base_origin=origin.rstrip("/"),
             entry_route="/members/search",
-            tenant_override_key="COMPUTER_USE_DEMO_ORIGIN",
         ),
         inputs=(
             InputSpec(
@@ -232,13 +246,17 @@ def open_sub_account_artifact(origin: str, *, approved: bool = False) -> Capabil
                 target=commit_target,
                 risk=RiskLevel.IRREVERSIBLE,
                 retry_policy=RetryPolicy(maximum_attempts=1),
+                idempotency_key="open-sub-account:{{member_id}}:{{nickname}}",
+                precondition=Condition(
+                    kind=ConditionKind.ELEMENT_PRESENT,
+                    target=commit_target,
+                ),
                 checkpoint=Condition(
                     kind=ConditionKind.ELEMENT_PRESENT,
                     target=Target(role="status", accessible_name="Sub-account opened"),
                 ),
             ),
         ),
-        known_business_outcomes=lookup_business_outcomes(),
         outputs=(),
         final_success_condition=Condition(
             kind=ConditionKind.ELEMENT_PRESENT,

@@ -1,9 +1,9 @@
 {
   "business_outcome": null,
   "failure": null,
-  "intervention_request_id": "intervention-32b483c1f729476c899c6caf7ef77fa1",
-  "outputs": null,
-  "run_id": "handoff-8d847f272911402ca81c7af0373e2c98",
+  "intervention_request_id": null,
+  "outputs": {},
+  "run_id": "handoff-949d79a19d9841a69909909534c0a38d",
   "safe_details": null,
-  "status": "escalated"
+  "status": "success"
 }

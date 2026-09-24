@@ -1,5 +1,42 @@
 {
   "$defs": {
+    "Condition": {
+      "additionalProperties": false,
+      "description": "The only predicate language used throughout waits and classification.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ConditionKind"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Condition",
+      "type": "object"
+    },
     "ConditionKind": {
       "enum": [
         "element_present",
@@ -185,38 +222,34 @@
     }
   },
   "additionalProperties": false,
-  "description": "The only predicate language used throughout waits and classification.",
+  "description": "Artifact-declared UI state that maps to a typed hard-failure code.",
   "properties": {
-    "kind": {
-      "$ref": "#/$defs/ConditionKind"
+    "description": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
     },
-    "pattern": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Pattern"
+    "detection_condition": {
+      "$ref": "#/$defs/Condition"
     },
-    "target": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/Target"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+    "error_code": {
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "title": "Error Code",
+      "type": "string"
+    },
+    "name": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Name",
+      "type": "string"
     }
   },
   "required": [
-    "kind"
+    "name",
+    "error_code",
+    "description",
+    "detection_condition"
   ],
-  "title": "Condition",
+  "title": "FailureOutcome",
   "type": "object"
 }

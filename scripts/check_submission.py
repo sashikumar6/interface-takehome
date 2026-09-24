@@ -82,8 +82,11 @@ def validate_handoff(errors: list[str]) -> None:
     root = ROOT / "evidence/handoff"
     for name in (
         "control-events.jsonl",
+        "events.jsonl",
+        "final.png",
         "intervention.json",
         "paused.png",
+        "result.json",
         "resumed-or-completed.png",
     ):
         require(root / name, errors)
@@ -98,6 +101,19 @@ def validate_handoff(errors: list[str]) -> None:
         ):
             if event not in text:
                 errors.append(f"handoff evidence lacks {event}")
+    result = root / "result.json"
+    if result.exists() and load_json(result).get("status") != "success":
+        errors.append("handoff did not persist its post-resume success result")
+    events = root / "events.jsonl"
+    if events.exists():
+        text = events.read_text(encoding="utf-8")
+        for event in (
+            '"final_classification":"escalated"',
+            '"human_step_validated"',
+            '"final_classification":"success"',
+        ):
+            if event not in text:
+                errors.append(f"handoff event trail lacks {event}")
 
 
 def validate_discovery(errors: list[str]) -> None:

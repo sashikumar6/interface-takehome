@@ -95,6 +95,14 @@ scripts/cu replay \
   --evidence-dir evidence/replay-success \
   --headed
 
+# The same approved artifact can be addressed through the capability catalog.
+scripts/cu replay \
+  --capability-id lookup_member_balance \
+  --version 1.0.0 \
+  --input member_id=12345 \
+  --evidence-dir evidence/catalog-replay \
+  --headed
+
 scripts/cu replay \
   --artifact artifacts/examples/lookup_member_balance.v1.json \
   --input member_id=99999 \
@@ -107,7 +115,7 @@ scripts/cu handoff-demo \
   --headed
 ```
 
-The manual `member_id=12345` replay above succeeds with balance `1234.56`. The committed `evidence/replay-success/` bundle deliberately replays a different member (`77777`) and records balance `987.65`, demonstrating that the compiled capability is parameterized rather than tied to the discovery fixture. The other expected terminal classifications are `business_outcome` with `member_not_found` and an escalation before the irreversible sub-account commit. During headed handoff, the human clicks **Commit sub-account** in the already-open browser and returns to the terminal; automation then re-observes and validates the same session before regaining ownership. `--automated-fixture-human --headless` exists only for deterministic testing.
+The manual `member_id=12345` replay above succeeds with balance `1234.56`. The committed `evidence/replay-success/` bundle deliberately replays a different member (`77777`) and records balance `987.65`, demonstrating that the compiled capability is parameterized rather than tied to the discovery fixture. The other expected classification is `business_outcome` with `member_not_found`. During headed replay, an irreversible step returns `escalated`, keeps the browser open, transfers the same session to the human, validates the declared checkpoint, and calls `ReplayEngine.resume()` to finish the remaining steps. The handoff evidence therefore records both the escalation boundary and the final `success`. `--automated-fixture-human --headless` exists only for deterministic testing.
 
 All operations are discoverable through `scripts/cu --help`. Hard failures and configuration errors return nonzero. Business outcomes are valid terminal results and return zero.
 
@@ -122,7 +130,7 @@ All operations are discoverable through `scripts/cu --help`. Hard failures and c
 - `evidence/replay-not-found/`: known business outcome evidence.
 - `evidence/replay-retry/`: first-load checkpoint failure followed by one bounded retry.
 - `evidence/replay-permission-denied/`: structured hard failure with expected, redacted observed state, and screenshot reference.
-- `evidence/handoff/`: intervention record, ownership transitions, paused/resumed screenshots, and same-session validation.
+- `evidence/handoff/`: intervention record, ownership transitions, paused/resumed screenshots, escalation terminal event, validated human step, and post-resume success result.
 
 Evidence is redacted before persistence. Invocation values and URL member segments are masked; credentials, headers, cookies, browser storage state, and profiles are never written. Screenshots are bounded to the synthetic local application.
 
@@ -136,11 +144,13 @@ uv run pytest
 scripts/verify_submission.sh
 ```
 
-The strict verifier also regenerates schemas, validates example artifacts, checks the replay import boundary, scans for credentials and persisted raw member IDs, and validates evidence completeness. The latest full run passes 44 tests and reports 73% branch-aware package coverage; the load-bearing domain, compiler, replay, policy, evidence, resolver, and browser-driver modules are covered directly. The committed genuine OpenAI discovery bundle makes the strict evidence check pass without a provider key during later verification.
+The strict verifier also regenerates schemas, validates example artifacts, checks the replay import boundary, scans for credentials and persisted raw member IDs, and validates evidence completeness. The latest full run passes 63 tests and reports 76% branch-aware package coverage; the load-bearing domain, compiler, replay, policy, evidence, resolver, browser-driver, provider-retry, catalog, dialog, output-parser, and CLI paths are covered directly. The committed genuine OpenAI discovery bundle makes the strict evidence check pass without a provider key during later verification.
 
 ## Failure behavior and safety
 
-Semantic resolution tries accessible role/name, then text, then label, and only an explicit structural fallback. Zero matches raise `TARGET_NOT_FOUND`; multiple matches raise `TARGET_AMBIGUOUS`. Checkpoints, waits, business outcomes, and final success share `Condition`. Known business outcomes are checked before hard-failure classification. Transient failures retry only for the artifact's allowlisted error codes and attempt count.
+Semantic resolution tries accessible role/name, then text, then label, and only an explicit structural fallback. A target can declare a semantic container such as a row containing `{{member_id}}` and an explicit zero-based ordinal for repeated controls. Zero matches raise `TARGET_NOT_FOUND`; multiple undeclared matches raise `TARGET_AMBIGUOUS`. Checkpoints, waits, business outcomes, declared UI failure outcomes, and final success share `Condition`. Business outcomes take precedence over coexisting success states; permission denial is artifact-declared rather than hardcoded English matching. Each step declares its own timeout, retry policy, optional precondition, and optional idempotency key.
+
+The replay run is also wrapped in a wall-clock budget, so an in-flight browser operation cannot escape the configured run timeout. Any ordinary surface/provider exception is redacted and converted into a persisted typed result. Unexpected dialogs remain open and become `UNEXPECTED_DIALOG`; automation never silently accepts or dismisses them. Policy URL checks call the driver's lightweight `current_url()` method, avoiding a screenshot and DOM walk before every action.
 
 One `PolicyEngine` gates discovery and replay actions. It enforces origin/route/action allowlists, approval state, run limits, control ownership, and risk transitions. Irreversible actions release automation ownership and produce an intervention record. Automation cannot act while the human owns the session.
 

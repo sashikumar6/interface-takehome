@@ -20,18 +20,6 @@
       "title": "Supported Version Range",
       "type": "string"
     },
-    "tenant_override_key": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Tenant Override Key"
-    },
     "vendor_id": {
       "minLength": 1,
       "title": "Vendor Id",

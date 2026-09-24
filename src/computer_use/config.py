@@ -20,8 +20,6 @@ class Settings(BaseSettings):
 
     demo_origin: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8765")
     evidence_dir: Path = Path("evidence")
-    runtime_dir: Path = Path("runtime")
-    headless: bool = True
     provider: Literal["anthropic", "openai"] = "openai"
     model: str = "gpt-4.1-mini"
     max_steps: int = Field(default=20, ge=1, le=100)

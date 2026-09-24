@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Frame, Locator, Page
 
 from computer_use.domain.errors import (
+    SurfaceExecutionError,
     TargetAmbiguousError,
     TargetNotFoundError,
     UnsupportedTargetError,
@@ -53,7 +55,35 @@ class TargetResolver:
         return matches[0]
 
     async def candidates(self, target: Target) -> list[tuple[str, Locator]]:
-        scope = await self._scope(target)
+        scope: Page | Frame | Locator = await self._scope(target)
+        if target.within is not None:
+            relational = target.within
+            if relational.role:
+                container = scope.get_by_role(
+                    cast(Any, relational.role),
+                    name=relational.accessible_name,
+                    exact=relational.accessible_name is not None,
+                )
+            else:
+                assert relational.text is not None
+                container = scope.get_by_text(relational.text, exact=False)
+            if relational.text is not None and relational.role:
+                container = container.filter(has_text=relational.text)
+            try:
+                container_count = await container.count()
+            except PlaywrightError as error:
+                raise SurfaceExecutionError(
+                    "SURFACE_EXECUTION_FAILED", "browser changed while resolving target scope"
+                ) from error
+            if container_count == 0:
+                raise TargetNotFoundError("TARGET_NOT_FOUND", "target scope was not found")
+            if container_count > 1:
+                raise TargetAmbiguousError(
+                    "TARGET_AMBIGUOUS",
+                    f"target scope matched {container_count} containers",
+                    {"match_count": container_count},
+                )
+            scope = container
         candidates: list[tuple[str, Locator]] = []
         if target.role and target.accessible_name:
             candidates.append(
@@ -81,7 +111,19 @@ class TargetResolver:
         attempted: list[str] = []
         for strategy, locator in await self.candidates(target):
             attempted.append(strategy)
-            count = await locator.count()
+            try:
+                count = await locator.count()
+            except PlaywrightError as error:
+                raise SurfaceExecutionError(
+                    "SURFACE_EXECUTION_FAILED", "browser changed while resolving target"
+                ) from error
+            if target.ordinal is not None:
+                if count > target.ordinal:
+                    return ResolvedTarget(
+                        locator=locator.nth(target.ordinal),
+                        strategy=f"{strategy}+ordinal[{target.ordinal}]",
+                    )
+                continue
             if count == 1:
                 return ResolvedTarget(locator=locator, strategy=strategy)
             if count > 1:
@@ -105,5 +147,10 @@ class TargetResolver:
         except TargetNotFoundError:
             return 0
         for _, locator in candidates:
-            total += await locator.count()
+            try:
+                total += await locator.count()
+            except PlaywrightError as error:
+                raise SurfaceExecutionError(
+                    "SURFACE_EXECUTION_FAILED", "browser changed while counting targets"
+                ) from error
         return total

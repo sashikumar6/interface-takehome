@@ -170,9 +170,19 @@ async def test_risky_commit_pauses_same_session_and_validates_resume(
         assert await manager.release_and_resume(
             driver,
             operator_id="integration-operator",
-            resume_condition=artifact.final_success_condition,
+            resume_condition=engine.resume_condition,
         )
         assert manager.owner is ControlOwner.AUTOMATION
+        final = await engine.resume(driver)
+        assert final.status is ReplayStatus.SUCCESS
+        assert json.loads((tmp_path / "handoff" / "result.json").read_text())["status"] == "success"
+        terminal_events = [
+            event for event in recorder.read_events() if event["event_type"] == "run_completed"
+        ]
+        assert [event["final_classification"] for event in terminal_events] == [
+            "escalated",
+            "success",
+        ]
         assert (tmp_path / "handoff" / "control-events.jsonl").exists()
     finally:
         await driver.close()

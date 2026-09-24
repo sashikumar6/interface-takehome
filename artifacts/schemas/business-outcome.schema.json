@@ -99,6 +99,19 @@
           "default": null,
           "title": "Near Label"
         },
+        "ordinal": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ordinal"
+        },
         "role": {
           "anyOf": [
             {
@@ -147,9 +160,64 @@
           ],
           "default": null,
           "title": "Text"
+        },
+        "within": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "Target",
+      "type": "object"
+    },
+    "TargetScope": {
+      "additionalProperties": false,
+      "description": "A semantic container used to disambiguate repeated controls.",
+      "properties": {
+        "accessible_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessible Name"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "TargetScope",
       "type": "object"
     }
   },

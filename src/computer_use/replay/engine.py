@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from time import monotonic
@@ -14,7 +15,9 @@ from computer_use.domain.models import (
     ActionType,
     BusinessOutcome,
     CapabilityArtifact,
+    Condition,
     FailureDetail,
+    FailureOutcome,
     InputSpec,
     OutputSpec,
     ReplayResult,
@@ -31,6 +34,19 @@ from computer_use.safety.redaction import redact_exception
 from computer_use.surfaces.base import SurfaceDriver
 
 
+@dataclass(slots=True)
+class _ReplayState:
+    capability: CapabilityArtifact
+    parameters: dict[str, Any]
+    development_override: bool
+    goal: str | None
+    started: float
+    started_at: datetime
+    reads: dict[str, str] = field(default_factory=dict)
+    completed_idempotency_keys: set[str] = field(default_factory=set)
+    next_step_index: int = 0
+
+
 class ReplayEngine:
     """Execute an approved capability without importing or calling any LLM provider."""
 
@@ -41,13 +57,14 @@ class ReplayEngine:
         recorder: EvidenceRecorder,
         condition_evaluator: ConditionEvaluator | None = None,
         handoff_manager: HandoffManager | None = None,
-        step_timeout_ms: int = 2_000,
+        step_timeout_ms: int | None = None,
     ) -> None:
         self.policy = policy
         self.recorder = recorder
         self.conditions = condition_evaluator or ConditionEvaluator()
         self.handoff_manager = handoff_manager
         self.step_timeout_ms = step_timeout_ms
+        self._state: _ReplayState | None = None
 
     @staticmethod
     def _parse_inputs(specs: tuple[InputSpec, ...], supplied: dict[str, Any]) -> dict[str, Any]:
@@ -61,32 +78,36 @@ class ReplayEngine:
         return {name: by_name[name].parse(value) for name, value in supplied.items()}
 
     @staticmethod
-    def _parse_output(spec: OutputSpec, raw: str) -> Any:
+    def _parse_output(spec: OutputSpec, raw: str) -> str | int | float | Decimal | bool:
         parser = spec.parser
-        if parser in {None, "text"} and spec.type is ValueType.STRING:
+        if spec.type is ValueType.STRING:
             return raw
-        if parser == "currency_decimal":
-            match = re.search(r"[-+]?\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)", raw)
-            if not match:
-                raise ValueError(f"output {spec.name} does not contain a currency decimal")
-            return Decimal(match.group(1).replace(",", ""))
-        if parser == "integer" or spec.type is ValueType.INTEGER:
+        if spec.type is ValueType.INTEGER:
             return int(raw.strip())
-        if parser == "number" or spec.type is ValueType.NUMBER:
+        if spec.type is ValueType.NUMBER:
             return float(raw.strip())
-        if parser == "decimal" or spec.type is ValueType.DECIMAL:
+        if spec.type is ValueType.DECIMAL:
+            value = raw.strip()
+            if parser == "currency_decimal":
+                match = re.search(r"[-+]?\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)", raw)
+                if not match:
+                    raise ValueError(f"output {spec.name} does not contain a currency decimal")
+                value = match.group(1).replace(",", "")
             try:
-                return Decimal(raw.strip())
+                return Decimal(value)
             except InvalidOperation as exc:
                 raise ValueError(f"output {spec.name} is not a decimal") from exc
-        if parser == "boolean" or spec.type is ValueType.BOOLEAN:
-            normalized = raw.strip().casefold()
-            if normalized in {"true", "yes", "1"}:
-                return True
-            if normalized in {"false", "no", "0"}:
-                return False
-            raise ValueError(f"output {spec.name} is not a boolean")
-        return raw
+        normalized = raw.strip().casefold()
+        if normalized in {"true", "yes", "1"}:
+            return True
+        if normalized in {"false", "no", "0"}:
+            return False
+        raise ValueError(f"output {spec.name} is not a boolean")
+
+    def _timeout_for(self, step: Step) -> int:
+        if self.step_timeout_ms is None:
+            return step.timeout_ms
+        return min(step.timeout_ms, self.step_timeout_ms)
 
     async def _capture_terminal(
         self, driver: SurfaceDriver, result: ReplayResult, observation: Any | None = None
@@ -105,20 +126,43 @@ class ReplayEngine:
             self.recorder.record_failure_snapshot(observation)
         self.recorder.write_json("result.json", result)
         self.recorder.record_event("run_completed", final_classification=result.status)
+        if result.status is not ReplayStatus.ESCALATED:
+            self._state = None
         return result
 
-    async def _business_outcome(
+    async def _declared_outcomes(
         self,
         driver: SurfaceDriver,
-        outcomes: tuple[BusinessOutcome, ...],
+        business_outcomes: tuple[BusinessOutcome, ...],
+        failure_outcomes: tuple[FailureOutcome, ...],
         parameters: dict[str, Any],
-    ) -> str | None:
-        for outcome in outcomes:
-            condition = outcome.detection_condition.interpolate(parameters)
-            result = await self.conditions.evaluate(driver, condition, timeout_ms=150)
-            if result.matched:
-                return outcome.name
-        return None
+        *,
+        timeout_ms: int,
+    ) -> tuple[str | None, FailureOutcome | None]:
+        declared: list[tuple[str, BusinessOutcome | FailureOutcome]] = [
+            *(("business", item) for item in business_outcomes),
+            *(("failure", item) for item in failure_outcomes),
+        ]
+        if not declared:
+            return None, None
+        results = await asyncio.gather(
+            *(
+                self.conditions.evaluate(
+                    driver,
+                    item.detection_condition.interpolate(parameters),
+                    timeout_ms=timeout_ms,
+                )
+                for _, item in declared
+            )
+        )
+        for (kind, item), result in zip(declared, results, strict=True):
+            if result.matched and kind == "business":
+                return item.name, None
+        for (kind, item), result in zip(declared, results, strict=True):
+            if result.matched and kind == "failure":
+                assert isinstance(item, FailureOutcome)
+                return None, item
+        return None, None
 
     async def _failure(
         self,
@@ -163,6 +207,16 @@ class ReplayEngine:
         self, driver: SurfaceDriver, step: Step, parameters: dict[str, Any]
     ) -> tuple[str | None, str | None]:
         target = step.target.interpolate(parameters) if step.target else None
+        if step.precondition is not None:
+            precondition = await self.conditions.evaluate(
+                driver,
+                step.precondition.interpolate(parameters),
+                timeout_ms=self._timeout_for(step),
+            )
+            if not precondition.matched:
+                raise ComputerUseError(
+                    "PRECONDITION_FAILED", "step precondition did not become true"
+                )
         if step.action is ActionType.NAVIGATE:
             assert step.value is not None
             value = interpolate_template(step.value, parameters, regex_escape=False)
@@ -181,7 +235,7 @@ class ReplayEngine:
         else:
             assert step.checkpoint is not None
             condition_result = await driver.wait_for(
-                step.checkpoint.interpolate(parameters), self.step_timeout_ms
+                step.checkpoint.interpolate(parameters), self._timeout_for(step)
             )
             if not condition_result.matched:
                 raise ComputerUseError(
@@ -190,51 +244,58 @@ class ReplayEngine:
             return "condition", None
         return result.locator_strategy, None
 
-    async def run(
+    async def _classify_error(
         self,
-        capability: CapabilityArtifact,
-        inputs: dict[str, Any],
         driver: SurfaceDriver,
-        *,
-        development_override: bool = False,
-        goal: str | None = None,
-    ) -> ReplayResult:
-        started = monotonic()
-        started_at = datetime.now(UTC)
-        self.recorder.write_json(
-            "invocation.json",
-            {"capability_id": capability.capability_id, "inputs": inputs},
+        state: _ReplayState,
+        step: Step,
+        index: int,
+        attempt: int,
+    ) -> ReplayResult | None:
+        timeout_ms = self._timeout_for(step)
+        outcome, declared_failure = await self._declared_outcomes(
+            driver,
+            state.capability.known_business_outcomes,
+            state.capability.known_failure_outcomes,
+            state.parameters,
+            timeout_ms=timeout_ms,
         )
-        self.recorder.record_event("run_started", capability_id=capability.capability_id)
-        try:
-            parameters = self._parse_inputs(capability.inputs, inputs)
-        except (TypeError, ValueError, ArithmeticError) as error:
+        if outcome:
+            return await self._capture_terminal(
+                driver,
+                ReplayResult(
+                    run_id=self.recorder.run_id,
+                    status=ReplayStatus.BUSINESS_OUTCOME,
+                    business_outcome=outcome,
+                    safe_details="known outcome detected before hard-failure classification",
+                ),
+            )
+        if declared_failure is not None:
             return await self._failure(
                 driver=driver,
-                step=None,
-                step_index=None,
-                code="INPUT_VALIDATION_FAILED",
-                message=str(error),
+                step=step,
+                step_index=index,
+                code=declared_failure.error_code,
+                message=declared_failure.description,
+                expected=declared_failure.detection_condition.model_dump(mode="json"),
+                retry_count=attempt - 1,
             )
+        return None
 
-        reads: dict[str, str] = {}
-        for index, step in enumerate(capability.steps):
+    async def _continue(self, driver: SurfaceDriver) -> ReplayResult:
+        state = self._state
+        assert state is not None
+        capability = state.capability
+        for index in range(state.next_step_index, len(capability.steps)):
+            step = capability.steps[index]
+            state.next_step_index = index
             last_code = "HARD_FAILURE"
             last_message = "step failed"
             attempts = step.retry_policy.maximum_attempts
             for attempt in range(1, attempts + 1):
-                if monotonic() - started >= self.policy.config.run_timeout_seconds:
-                    return await self._failure(
-                        driver=driver,
-                        step=step,
-                        step_index=index,
-                        code="RUN_TIMEOUT",
-                        message="replay exceeded its configured timeout",
-                        retry_count=attempt - 1,
-                    )
-                observation = await driver.observe()
+                current_url = await driver.current_url()
                 value = (
-                    interpolate_template(step.value, parameters, regex_escape=False)
+                    interpolate_template(step.value, state.parameters, regex_escape=False)
                     if step.value is not None
                     else None
                 )
@@ -242,12 +303,12 @@ class ReplayEngine:
                     step,
                     run_type="replay",
                     url=value if step.action is ActionType.NAVIGATE else None,
-                    current_url=observation.url,
+                    current_url=current_url,
                     base_url=capability.target_app.base_origin,
                     capability=capability,
-                    development_override=development_override,
+                    development_override=state.development_override,
                     step_index=index,
-                    started_at=started_at,
+                    elapsed_seconds=monotonic() - state.started,
                     control_owner=(
                         self.handoff_manager.owner
                         if self.handoff_manager is not None
@@ -267,22 +328,24 @@ class ReplayEngine:
                         run_id=self.recorder.run_id, recorder=self.recorder
                     )
                     self.handoff_manager = manager
+                    observation = await driver.observe()
                     request = await manager.request_intervention(
                         driver=driver,
                         capability_id=capability.capability_id,
-                        goal=goal or capability.description,
+                        goal=state.goal or capability.description,
                         step=step,
                         step_index=index,
                         reason=decision.reason,
                         observation=observation,
                     )
-                    result = ReplayResult(
-                        run_id=self.recorder.run_id,
-                        status=ReplayStatus.ESCALATED,
-                        intervention_request_id=request.request_id,
+                    return await self._capture_terminal(
+                        driver,
+                        ReplayResult(
+                            run_id=self.recorder.run_id,
+                            status=ReplayStatus.ESCALATED,
+                            intervention_request_id=request.request_id,
+                        ),
                     )
-                    self.recorder.write_json("result.json", result)
-                    return result
                 if not decision.allowed:
                     return await self._failure(
                         driver=driver,
@@ -293,20 +356,41 @@ class ReplayEngine:
                         retry_count=attempt - 1,
                     )
                 try:
-                    strategy, read_value = await self._execute_step(driver, step, parameters)
+                    idempotency_key = (
+                        interpolate_template(
+                            step.idempotency_key,
+                            state.parameters,
+                            regex_escape=False,
+                        )
+                        if step.idempotency_key is not None
+                        else None
+                    )
+                    strategy: str | None
+                    read_value: str | None
+                    if (
+                        idempotency_key is not None
+                        and idempotency_key in state.completed_idempotency_keys
+                    ):
+                        strategy, read_value = "idempotency_guard", None
+                    else:
+                        strategy, read_value = await self._execute_step(
+                            driver, step, state.parameters
+                        )
+                        if idempotency_key is not None:
+                            state.completed_idempotency_keys.add(idempotency_key)
                     checkpoint_result = None
                     if step.checkpoint is not None and step.action is not ActionType.WAIT_FOR:
                         checkpoint_result = await self.conditions.evaluate(
                             driver,
-                            step.checkpoint.interpolate(parameters),
-                            timeout_ms=self.step_timeout_ms,
+                            step.checkpoint.interpolate(state.parameters),
+                            timeout_ms=self._timeout_for(step),
                         )
                         if not checkpoint_result.matched:
                             raise ComputerUseError(
                                 "CHECKPOINT_MISMATCH", "step checkpoint did not become true"
                             )
                     if step.reads_into and read_value is not None:
-                        reads[step.reads_into] = read_value
+                        state.reads[step.reads_into] = read_value
                     self.recorder.record_event(
                         "step_succeeded",
                         step_id=step.id,
@@ -316,35 +400,14 @@ class ReplayEngine:
                         condition_result=checkpoint_result,
                         retry_count=attempt - 1,
                     )
+                    state.next_step_index = index + 1
                     break
-                except (ComputerUseError, ValueError) as error:
-                    last_code = getattr(error, "code", "HARD_FAILURE")
-                    last_message = str(error)
-                    outcome = await self._business_outcome(
-                        driver, capability.known_business_outcomes, parameters
-                    )
-                    if outcome:
-                        result = ReplayResult(
-                            run_id=self.recorder.run_id,
-                            status=ReplayStatus.BUSINESS_OUTCOME,
-                            business_outcome=outcome,
-                            safe_details="known outcome detected before hard-failure classification",
-                        )
-                        return await self._capture_terminal(driver, result)
-                    current = await driver.observe()
-                    combined = " ".join((*current.alerts, current.visible_text)).casefold()
-                    if "permission denied" in combined:
-                        return await self._failure(
-                            driver=driver,
-                            step=step,
-                            step_index=index,
-                            code="PERMISSION_DENIED",
-                            message="the demo application denied access",
-                            expected=(
-                                step.checkpoint.model_dump(mode="json") if step.checkpoint else None
-                            ),
-                            retry_count=attempt - 1,
-                        )
+                except Exception as error:
+                    last_code = str(getattr(error, "code", "UNEXPECTED_EXECUTION_ERROR"))
+                    last_message = redact_exception(error)
+                    classified = await self._classify_error(driver, state, step, index, attempt)
+                    if classified is not None:
+                        return classified
                     retryable = last_code in step.retry_policy.retryable_error_codes
                     if attempt < attempts and retryable:
                         self.recorder.record_event(
@@ -369,35 +432,40 @@ class ReplayEngine:
                         ),
                         retry_count=attempt - 1,
                     )
-            else:  # pragma: no cover - loop always returns on final failure
-                return await self._failure(
-                    driver=driver,
-                    step=step,
-                    step_index=index,
-                    code="RETRY_EXHAUSTED",
-                    message=last_message,
-                    retry_count=attempts - 1,
-                )
 
+        final_timeout = self._timeout_for(capability.steps[-1])
+        outcome, declared_failure = await self._declared_outcomes(
+            driver,
+            capability.known_business_outcomes,
+            capability.known_failure_outcomes,
+            state.parameters,
+            timeout_ms=final_timeout,
+        )
+        if outcome:
+            return await self._capture_terminal(
+                driver,
+                ReplayResult(
+                    run_id=self.recorder.run_id,
+                    status=ReplayStatus.BUSINESS_OUTCOME,
+                    business_outcome=outcome,
+                    safe_details="known outcome detected before final success classification",
+                ),
+            )
+        if declared_failure is not None:
+            return await self._failure(
+                driver=driver,
+                step=capability.steps[-1],
+                step_index=len(capability.steps) - 1,
+                code=declared_failure.error_code,
+                message=declared_failure.description,
+                expected=declared_failure.detection_condition.model_dump(mode="json"),
+            )
         final = await self.conditions.evaluate(
             driver,
-            capability.final_success_condition.interpolate(parameters),
-            timeout_ms=self.step_timeout_ms,
+            capability.final_success_condition.interpolate(state.parameters),
+            timeout_ms=final_timeout,
         )
         if not final.matched:
-            outcome = await self._business_outcome(
-                driver, capability.known_business_outcomes, parameters
-            )
-            if outcome:
-                return await self._capture_terminal(
-                    driver,
-                    ReplayResult(
-                        run_id=self.recorder.run_id,
-                        status=ReplayStatus.BUSINESS_OUTCOME,
-                        business_outcome=outcome,
-                        safe_details="known outcome detected before final checkpoint failure",
-                    ),
-                )
             return await self._failure(
                 driver=driver,
                 step=capability.steps[-1],
@@ -408,7 +476,7 @@ class ReplayEngine:
             )
         try:
             outputs = {
-                spec.name: self._parse_output(spec, reads[spec.source])
+                spec.name: self._parse_output(spec, state.reads[spec.source])
                 for spec in capability.outputs
             }
         except (KeyError, TypeError, ValueError, ArithmeticError) as error:
@@ -417,9 +485,159 @@ class ReplayEngine:
                 step=capability.steps[-1],
                 step_index=len(capability.steps) - 1,
                 code="OUTPUT_PARSE_FAILED",
-                message=str(error),
+                message=redact_exception(error),
             )
         return await self._capture_terminal(
             driver,
             ReplayResult(run_id=self.recorder.run_id, status=ReplayStatus.SUCCESS, outputs=outputs),
         )
+
+    async def _run_bounded(self, driver: SurfaceDriver) -> ReplayResult:
+        state = self._state
+        assert state is not None
+        remaining = self.policy.config.run_timeout_seconds - (monotonic() - state.started)
+        if remaining <= 0:
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code="RUN_TIMEOUT",
+                message="replay exceeded its configured timeout",
+            )
+        try:
+            async with asyncio.timeout(remaining):
+                return await self._continue(driver)
+        except TimeoutError:
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code="RUN_TIMEOUT",
+                message="replay exceeded its configured timeout during an in-flight operation",
+            )
+        except Exception as error:
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code=str(getattr(error, "code", "UNEXPECTED_EXECUTION_ERROR")),
+                message=redact_exception(error),
+            )
+
+    async def run(
+        self,
+        capability: CapabilityArtifact,
+        inputs: dict[str, Any],
+        driver: SurfaceDriver,
+        *,
+        development_override: bool = False,
+        goal: str | None = None,
+    ) -> ReplayResult:
+        if self._state is not None:
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code="RUN_ALREADY_ACTIVE",
+                message="this replay engine already has a paused or active run",
+            )
+        # Handoff managers are run-scoped. A completed engine can safely be
+        # reused without inheriting released ownership from a prior run.
+        self.handoff_manager = None
+        self.recorder.write_json(
+            "invocation.json",
+            {"capability_id": capability.capability_id, "inputs": inputs},
+        )
+        self.recorder.record_event("run_started", capability_id=capability.capability_id)
+        try:
+            parameters = self._parse_inputs(capability.inputs, inputs)
+        except (TypeError, ValueError, ArithmeticError) as error:
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code="INPUT_VALIDATION_FAILED",
+                message=redact_exception(error),
+            )
+        self._state = _ReplayState(
+            capability=capability,
+            parameters=parameters,
+            development_override=development_override,
+            goal=goal,
+            started=monotonic(),
+            started_at=datetime.now(UTC),
+        )
+        return await self._run_bounded(driver)
+
+    @property
+    def resume_condition(self) -> Condition | None:
+        """Return the pending step checkpoint used to validate human work."""
+
+        if self._state is None:
+            return None
+        index = self._state.next_step_index
+        if index >= len(self._state.capability.steps):
+            return self._state.capability.final_success_condition
+        return self._state.capability.steps[index].checkpoint
+
+    async def resume(self, driver: SurfaceDriver) -> ReplayResult:
+        """Continue a paused run after human control returns on the same driver."""
+
+        state = self._state
+        manager = self.handoff_manager
+        if state is None or manager is None:
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code="NO_PAUSED_RUN",
+                message="there is no paused replay to resume",
+            )
+        if manager.owner.value != "automation" or manager.status.value != "resumed":
+            return await self._failure(
+                driver=driver,
+                step=None,
+                step_index=None,
+                code="CONTROL_NOT_OWNED",
+                message="automation cannot resume until human control is released and validated",
+            )
+        index = state.next_step_index
+        step = state.capability.steps[index]
+        if step.checkpoint is None:
+            return await self._failure(
+                driver=driver,
+                step=step,
+                step_index=index,
+                code="RESUME_VALIDATION_UNAVAILABLE",
+                message="the human-completed step has no checkpoint for safe resume",
+            )
+        validated = await self.conditions.evaluate(
+            driver,
+            step.checkpoint.interpolate(state.parameters),
+            timeout_ms=self._timeout_for(step),
+        )
+        if not validated.matched:
+            return await self._failure(
+                driver=driver,
+                step=step,
+                step_index=index,
+                code="RESUME_VALIDATION_FAILED",
+                message="human-completed step did not satisfy its declared checkpoint",
+                expected=step.checkpoint.model_dump(mode="json"),
+            )
+        self.recorder.record_event(
+            "human_step_validated",
+            step_id=step.id,
+            step_index=index,
+            condition_result=validated,
+        )
+        if step.idempotency_key is not None:
+            state.completed_idempotency_keys.add(
+                interpolate_template(
+                    step.idempotency_key,
+                    state.parameters,
+                    regex_escape=False,
+                )
+            )
+        state.next_step_index = index + 1
+        return await self._run_bounded(driver)

@@ -99,6 +99,35 @@ def _canonical_text(value: str | None) -> str | None:
     return " ".join(value.split()) if value is not None else None
 
 
+class TargetScope(StrictModel):
+    """A semantic container used to disambiguate repeated controls."""
+
+    role: str | None = None
+    accessible_name: str | None = None
+    text: str | None = None
+
+    @field_validator("role", "accessible_name", "text", mode="before")
+    @classmethod
+    def normalize_whitespace(cls, value: Any) -> Any:
+        return _canonical_text(value) if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def validate_strategy(self) -> TargetScope:
+        if not (self.text or self.role):
+            raise ValueError("target scope needs a semantic role and/or contained text")
+        if self.accessible_name is not None and self.role is None:
+            raise ValueError("scope accessible_name requires role")
+        return self
+
+    def interpolate(self, parameters: dict[str, Any]) -> TargetScope:
+        data = self.model_dump()
+        for field in ("accessible_name", "text"):
+            value = data.get(field)
+            if isinstance(value, str):
+                data[field] = interpolate_template(value, parameters, regex_escape=False)
+        return TargetScope.model_validate(data)
+
+
 class Target(StrictModel):
     """Portable semantic intent; never a generated Playwright selector."""
 
@@ -108,6 +137,8 @@ class Target(StrictModel):
     near_label: str | None = None
     frame_name: str | None = None
     frame_title: str | None = None
+    within: TargetScope | None = None
+    ordinal: int | None = Field(default=None, ge=0)
     structural_fallback: str | None = None
     structural_surface: Literal["playwright"] | None = None
 
@@ -150,6 +181,8 @@ class Target(StrictModel):
             value = data.get(field)
             if isinstance(value, str):
                 data[field] = interpolate_template(value, parameters, regex_escape=False)
+        if self.within is not None:
+            data["within"] = self.within.interpolate(parameters).model_dump()
         return Target.model_validate(data)
 
 
@@ -264,6 +297,21 @@ class OutputSpec(StrictModel):
         Literal["text", "integer", "number", "decimal", "currency_decimal", "boolean"] | None
     ) = None
 
+    @model_validator(mode="after")
+    def parser_matches_type(self) -> OutputSpec:
+        allowed = {
+            ValueType.STRING: {None, "text"},
+            ValueType.INTEGER: {None, "integer"},
+            ValueType.NUMBER: {None, "number"},
+            ValueType.DECIMAL: {None, "decimal", "currency_decimal"},
+            ValueType.BOOLEAN: {None, "boolean"},
+        }
+        if self.parser not in allowed[self.type]:
+            raise ValueError(
+                f"parser {self.parser!r} is incompatible with output type {self.type.value}"
+            )
+        return self
+
 
 class RetryPolicy(StrictModel):
     maximum_attempts: int = Field(default=1, ge=1, le=10)
@@ -277,7 +325,10 @@ class Step(StrictModel):
     target: Target | None = None
     value: str | None = None
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
+    timeout_ms: int = Field(default=5_000, ge=100, le=120_000)
+    precondition: Condition | None = None
     checkpoint: Condition | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
     reads_into: str | None = None
     risk: RiskLevel = RiskLevel.SAFE
 
@@ -298,11 +349,26 @@ class Step(StrictModel):
             raise ValueError("value is legal only on type or navigate steps")
         if self.action is ActionType.WAIT_FOR and self.checkpoint is None:
             raise ValueError("wait_for step requires checkpoint")
+        if (
+            self.risk is RiskLevel.IRREVERSIBLE
+            and self.precondition is None
+            and self.idempotency_key is None
+        ):
+            raise ValueError("irreversible step requires a precondition or idempotency key")
         return self
 
 
 class BusinessOutcome(StrictModel):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    description: str = Field(min_length=1, max_length=500)
+    detection_condition: Condition
+
+
+class FailureOutcome(StrictModel):
+    """Artifact-declared UI state that maps to a typed hard-failure code."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    error_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
     description: str = Field(min_length=1, max_length=500)
     detection_condition: Condition
 
@@ -313,7 +379,6 @@ class AppMetadata(StrictModel):
     supported_version_range: str = Field(min_length=1)
     base_origin: str
     entry_route: str = Field(pattern=r"^/")
-    tenant_override_key: str | None = None
 
     @field_validator("base_origin")
     @classmethod
@@ -358,9 +423,17 @@ class CapabilityArtifact(StrictModel):
     inputs: tuple[InputSpec, ...]
     steps: tuple[Step, ...] = Field(min_length=1)
     known_business_outcomes: tuple[BusinessOutcome, ...] = ()
+    known_failure_outcomes: tuple[FailureOutcome, ...] = ()
     outputs: tuple[OutputSpec, ...]
     final_success_condition: Condition
     provenance: Provenance
+
+    @field_validator("schema_version")
+    @classmethod
+    def supported_schema_version(cls, value: str) -> str:
+        if value != "1.0":
+            raise ValueError(f"unsupported capability schema_version {value!r}; expected '1.0'")
+        return value
 
     @model_validator(mode="after")
     def validate_contract(self) -> CapabilityArtifact:
@@ -368,11 +441,13 @@ class CapabilityArtifact(StrictModel):
         step_ids = [item.id for item in self.steps]
         output_names = [item.name for item in self.outputs]
         outcome_names = [item.name for item in self.known_business_outcomes]
+        failure_outcome_names = [item.name for item in self.known_failure_outcomes]
         for label, names in (
             ("input", input_names),
             ("step", step_ids),
             ("output", output_names),
             ("outcome", outcome_names),
+            ("failure outcome", failure_outcome_names),
         ):
             if len(names) != len(set(names)):
                 raise ValueError(f"duplicate {label} names")
@@ -407,7 +482,7 @@ class FailureDetail(StrictModel):
 class ReplayResult(StrictModel):
     run_id: str = Field(min_length=1)
     status: ReplayStatus
-    outputs: dict[str, JsonValue] | None = None
+    outputs: dict[str, JsonScalar] | None = None
     business_outcome: str | None = None
     safe_details: str | None = None
     failure: FailureDetail | None = None
@@ -588,6 +663,7 @@ class ConditionResult(StrictModel):
 
 
 SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
+    TargetScope,
     Target,
     Condition,
     InputSpec,
@@ -595,6 +671,7 @@ SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
     RetryPolicy,
     Step,
     BusinessOutcome,
+    FailureOutcome,
     AppMetadata,
     Provenance,
     CapabilityArtifact,

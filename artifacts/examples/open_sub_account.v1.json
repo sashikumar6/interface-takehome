@@ -9,10 +9,12 @@
       "frame_name": null,
       "frame_title": null,
       "near_label": null,
+      "ordinal": null,
       "role": "status",
       "structural_fallback": null,
       "structural_surface": null,
-      "text": null
+      "text": null,
+      "within": null
     }
   },
   "inputs": [
@@ -38,26 +40,8 @@
       "validation_pattern": "^.{1,40}$"
     }
   ],
-  "known_business_outcomes": [
-    {
-      "description": "The synthetic member fixture does not exist.",
-      "detection_condition": {
-        "kind": "text_matches",
-        "pattern": "Member not found",
-        "target": null
-      },
-      "name": "member_not_found"
-    },
-    {
-      "description": "The supplied member ID does not have the expected format.",
-      "detection_condition": {
-        "kind": "text_matches",
-        "pattern": "Invalid member ID format",
-        "target": null
-      },
-      "name": "invalid_member_id"
-    }
-  ],
+  "known_business_outcomes": [],
+  "known_failure_outcomes": [],
   "outputs": [],
   "provenance": {
     "approval_state": "approved",
@@ -81,6 +65,8 @@
         "target": null
       },
       "id": "step_01_navigate",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -89,12 +75,15 @@
       },
       "risk": "safe",
       "target": null,
+      "timeout_ms": 5000,
       "value": "http://127.0.0.1:8765/members/search"
     },
     {
       "action": "type",
       "checkpoint": null,
       "id": "step_02_type_member",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -107,11 +96,14 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "textbox",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": "{{member_id}}"
     },
     {
@@ -124,13 +116,17 @@
           "frame_name": null,
           "frame_title": null,
           "near_label": null,
+          "ordinal": null,
           "role": "link",
           "structural_fallback": null,
           "structural_surface": null,
-          "text": null
+          "text": null,
+          "within": null
         }
       },
       "id": "step_03_search",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -143,11 +139,14 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "button",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": null
     },
     {
@@ -160,13 +159,17 @@
           "frame_name": null,
           "frame_title": null,
           "near_label": null,
+          "ordinal": null,
           "role": "combobox",
           "structural_fallback": null,
           "structural_surface": null,
-          "text": null
+          "text": null,
+          "within": null
         }
       },
       "id": "step_04_open_form",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -179,17 +182,22 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "link",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": null
     },
     {
       "action": "type",
       "checkpoint": null,
       "id": "step_05_type_account_type",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -202,17 +210,22 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "combobox",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": "{{account_type}}"
     },
     {
       "action": "type",
       "checkpoint": null,
       "id": "step_06_type_nickname",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -225,11 +238,14 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "textbox",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": "{{nickname}}"
     },
     {
@@ -242,13 +258,17 @@
           "frame_name": null,
           "frame_title": null,
           "near_label": null,
+          "ordinal": null,
           "role": "button",
           "structural_fallback": null,
           "structural_surface": null,
-          "text": null
+          "text": null,
+          "within": null
         }
       },
       "id": "step_07_review",
+      "idempotency_key": null,
+      "precondition": null,
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -261,11 +281,14 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "button",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": null
     },
     {
@@ -278,13 +301,32 @@
           "frame_name": null,
           "frame_title": null,
           "near_label": null,
+          "ordinal": null,
           "role": "status",
           "structural_fallback": null,
           "structural_surface": null,
-          "text": null
+          "text": null,
+          "within": null
         }
       },
       "id": "step_08_commit",
+      "idempotency_key": "open-sub-account:{{member_id}}:{{nickname}}",
+      "precondition": {
+        "kind": "element_present",
+        "pattern": null,
+        "target": {
+          "accessible_name": "Commit sub-account",
+          "frame_name": null,
+          "frame_title": null,
+          "near_label": null,
+          "ordinal": null,
+          "role": "button",
+          "structural_fallback": null,
+          "structural_surface": null,
+          "text": null,
+          "within": null
+        }
+      },
       "reads_into": null,
       "retry_policy": {
         "backoff_seconds": 0.0,
@@ -297,11 +339,14 @@
         "frame_name": null,
         "frame_title": null,
         "near_label": null,
+        "ordinal": null,
         "role": "button",
         "structural_fallback": null,
         "structural_surface": null,
-        "text": null
+        "text": null,
+        "within": null
       },
+      "timeout_ms": 5000,
       "value": null
     }
   ],
@@ -310,7 +355,6 @@
     "base_origin": "http://127.0.0.1:8765",
     "entry_route": "/members/search",
     "supported_version_range": ">=1.0,<2.0",
-    "tenant_override_key": "COMPUTER_USE_DEMO_ORIGIN",
     "vendor_id": "interface-ai-demo"
   }
 }
