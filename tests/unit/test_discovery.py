@@ -39,19 +39,23 @@ class FakeSurface:
     async def current_url(self) -> str:
         return "http://127.0.0.1:8765/members/search"
 
-    async def navigate(self, url: str) -> ActionResult:
+    async def navigate(self, url: str, timeout_ms: int) -> ActionResult:
+        del timeout_ms
         self.actions.append(f"navigate:{url}")
         return ActionResult(success=True, locator_strategy="url")
 
-    async def click(self, target: Target) -> ActionResult:
+    async def click(self, target: Target, timeout_ms: int) -> ActionResult:
+        del timeout_ms
         self.actions.append(f"click:{target.accessible_name}")
         return ActionResult(success=True, locator_strategy="role+accessible_name")
 
-    async def type(self, target: Target, text: str) -> ActionResult:
+    async def type(self, target: Target, text: str, timeout_ms: int) -> ActionResult:
+        del timeout_ms
         self.actions.append(f"type:{text}")
         return ActionResult(success=True, locator_strategy="role+accessible_name")
 
-    async def read(self, target: Target) -> ReadResult:
+    async def read(self, target: Target, timeout_ms: int) -> ReadResult:
+        del timeout_ms
         self.actions.append(f"read:{target.accessible_name}")
         return ReadResult(
             success=True,

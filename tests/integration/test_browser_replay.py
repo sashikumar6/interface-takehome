@@ -7,8 +7,14 @@ from pathlib import Path
 import httpx
 import pytest
 
-from computer_use.domain.errors import TargetAmbiguousError
-from computer_use.domain.models import CapabilityArtifact, ControlOwner, ReplayStatus, Target
+from computer_use.domain.errors import TargetAmbiguousError, TargetNotFoundError
+from computer_use.domain.models import (
+    CapabilityArtifact,
+    ControlOwner,
+    ReplayStatus,
+    Target,
+    TargetScope,
+)
 from computer_use.examples import open_sub_account_artifact
 from computer_use.observability.evidence import EvidenceRecorder
 from computer_use.replay.engine import ReplayEngine
@@ -123,13 +129,62 @@ async def test_ambiguous_semantic_target_is_distinct_failure(
 ) -> None:
     driver = await PlaywrightSurfaceDriver.launch(headless=True)
     try:
-        await driver.navigate(f"{live_demo_origin}/operator")
+        await driver.navigate(f"{live_demo_origin}/operator", 2_000)
         with pytest.raises(TargetAmbiguousError) as captured:
-            await driver.click(Target(text="Operator handoff"))
+            await driver.click(Target(text="Operator handoff"), 2_000)
         assert captured.value.code == "TARGET_AMBIGUOUS"
         screenshot = tmp_path / "ambiguous.png"
         await driver.screenshot(screenshot)
         assert screenshot.exists()
+    finally:
+        await driver.close()
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_relational_scope_and_ordinal_resolve_repeated_controls(
+    live_demo_origin: str,
+) -> None:
+    driver = await PlaywrightSurfaceDriver.launch(headless=True)
+    try:
+        await driver.navigate(f"{live_demo_origin}/operator", 2_000)
+        scoped = await driver.click(
+            Target(
+                role="link",
+                accessible_name="Open member",
+                within=TargetScope(role="row", text="Member 77777"),
+            ),
+            2_000,
+        )
+        assert scoped.locator_strategy == "role+accessible_name"
+        assert await driver.current_url() == f"{live_demo_origin}/operator?member=77777"
+
+        await driver.navigate(f"{live_demo_origin}/operator", 2_000)
+        ordinal = await driver.click(
+            Target(role="link", accessible_name="Open member", ordinal=0),
+            2_000,
+        )
+        assert ordinal.locator_strategy == "role+accessible_name+ordinal[0]"
+        assert await driver.current_url() == f"{live_demo_origin}/operator?member=12345"
+
+        with pytest.raises(TargetNotFoundError):
+            await driver.click(
+                Target(
+                    role="link",
+                    accessible_name="Open member",
+                    within=TargetScope(role="row", text="Member 00000"),
+                ),
+                500,
+            )
+        with pytest.raises(TargetAmbiguousError):
+            await driver.click(
+                Target(
+                    role="link",
+                    accessible_name="Open member",
+                    within=TargetScope(role="row"),
+                ),
+                500,
+            )
     finally:
         await driver.close()
 
@@ -165,6 +220,7 @@ async def test_risky_commit_pauses_same_session_and_validates_resume(
         await manager.operator_click(
             driver,
             Target(role="button", accessible_name="Commit sub-account"),
+            timeout_ms=engine.pending_step_timeout_ms,
             operator_id="integration-operator",
         )
         assert await manager.release_and_resume(

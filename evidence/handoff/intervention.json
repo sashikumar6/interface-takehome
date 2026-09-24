@@ -68,17 +68,17 @@
       "path": "evidence/handoff/observations/observation-001.png",
       "sha256": "9e8f6a0b05d4f2da47b6776e02a57f26b878b92670acbc7058b3a4b96f7621e7"
     },
-    "timestamp": "2026-09-24T06:24:29.596652Z",
+    "timestamp": "2026-09-24T06:48:56.459234Z",
     "title": "Review Sub-account | Heritage Community Bank",
     "url": "http://127.0.0.1:8765/members/***45/sub-accounts/review",
     "visible_text": "HERITAGE COMMUNITY BANK Member Servicing Portal 4.2 Member search | Operator handoff DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic. Review sub-account Human confirmation required Opening this sub-account changes demo fixture state. Proposed account Synthetic member ID ***45 Type Holiday savings Nickname Travel Fund Commit sub-account Return to form Local training system. No authentication. No real financial data."
   },
   "goal": "Open the reviewed synthetic holiday sub-account",
   "reason": "irreversible action requires transfer to human control",
-  "request_id": "intervention-2b0de24ef1e740f3b160b8baac9a7c60",
-  "requested_at": "2026-09-24 06:24:29.628635+00:00",
+  "request_id": "intervention-a7e508e311fe4185b792138bdd58a518",
+  "requested_at": "2026-09-24 06:48:56.489833+00:00",
   "resolved_at": null,
-  "run_id": "handoff-949d79a19d9841a69909909534c0a38d",
+  "run_id": "handoff-65e8fe6485874037af36ae4843c848e0",
   "screenshot_reference": {
     "description": "browser at the human commit boundary",
     "kind": "screenshot",

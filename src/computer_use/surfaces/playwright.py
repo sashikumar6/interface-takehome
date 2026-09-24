@@ -125,7 +125,13 @@ class PlaywrightSurfaceDriver:
     def _duration(started: float) -> int:
         return max(0, round((monotonic() - started) * 1_000))
 
-    async def _resolved(self, target: Target, *, timeout_ms: int = 3_000) -> ResolvedTarget:
+    @staticmethod
+    def _remaining_ms(started: float, timeout_ms: int) -> int:
+        """Return the unspent portion of one artifact-declared operation budget."""
+
+        return max(1, timeout_ms - round((monotonic() - started) * 1_000))
+
+    async def _resolved(self, target: Target, *, timeout_ms: int) -> ResolvedTarget:
         deadline = monotonic() + timeout_ms / 1_000
         last_error: TargetNotFoundError | None = None
         while monotonic() < deadline:
@@ -136,11 +142,11 @@ class PlaywrightSurfaceDriver:
                 await asyncio.sleep(0.05)
         raise last_error or TargetNotFoundError("TARGET_NOT_FOUND", "target was not found")
 
-    async def navigate(self, url: str) -> ActionResult:
+    async def navigate(self, url: str, timeout_ms: int) -> ActionResult:
         self._check_session()
         started = monotonic()
         try:
-            await self._page.goto(url, wait_until="domcontentloaded", timeout=10_000)
+            await self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
             return ActionResult(
                 success=True,
                 locator_strategy="url",
@@ -152,12 +158,12 @@ class PlaywrightSurfaceDriver:
         except PlaywrightError as exc:
             raise SurfaceExecutionError("NAVIGATION_FAILED", self._redactor.exception(exc)) from exc
 
-    async def click(self, target: Target) -> ActionResult:
+    async def click(self, target: Target, timeout_ms: int) -> ActionResult:
         self._check_session()
         started = monotonic()
-        resolved = await self._resolved(target)
+        resolved = await self._resolved(target, timeout_ms=timeout_ms)
         try:
-            await resolved.locator.click(timeout=5_000)
+            await resolved.locator.click(timeout=self._remaining_ms(started, timeout_ms))
             return ActionResult(
                 success=True,
                 locator_strategy=resolved.strategy,
@@ -169,16 +175,20 @@ class PlaywrightSurfaceDriver:
         except PlaywrightError as exc:
             raise self._execution_error(exc, operation="click") from exc
 
-    async def type(self, target: Target, text: str) -> ActionResult:
+    async def type(self, target: Target, text: str, timeout_ms: int) -> ActionResult:
         self._check_session()
         started = monotonic()
-        resolved = await self._resolved(target)
+        resolved = await self._resolved(target, timeout_ms=timeout_ms)
         try:
-            tag_name = await resolved.locator.evaluate("el => el.tagName")
+            tag_name = await resolved.locator.evaluate(
+                "el => el.tagName", timeout=self._remaining_ms(started, timeout_ms)
+            )
             if str(tag_name).casefold() == "select":
-                await resolved.locator.select_option(value=text, timeout=5_000)
+                await resolved.locator.select_option(
+                    value=text, timeout=self._remaining_ms(started, timeout_ms)
+                )
             else:
-                await resolved.locator.fill(text, timeout=5_000)
+                await resolved.locator.fill(text, timeout=self._remaining_ms(started, timeout_ms))
             return ActionResult(
                 success=True,
                 locator_strategy=resolved.strategy,
@@ -190,12 +200,18 @@ class PlaywrightSurfaceDriver:
         except PlaywrightError as exc:
             raise self._execution_error(exc, operation="type") from exc
 
-    async def read(self, target: Target) -> ReadResult:
+    async def read(self, target: Target, timeout_ms: int) -> ReadResult:
         self._check_session()
         started = monotonic()
-        resolved = await self._resolved(target)
+        resolved = await self._resolved(target, timeout_ms=timeout_ms)
         try:
-            value = " ".join((await resolved.locator.inner_text(timeout=5_000)).split())
+            value = " ".join(
+                (
+                    await resolved.locator.inner_text(
+                        timeout=self._remaining_ms(started, timeout_ms)
+                    )
+                ).split()
+            )
             return ReadResult(
                 success=True,
                 value=self._redactor.text(value),
@@ -219,7 +235,9 @@ class PlaywrightSurfaceDriver:
             elif condition.kind is ConditionKind.ELEMENT_PRESENT:
                 assert condition.target is not None
                 resolved = await self._resolved(condition.target, timeout_ms=timeout_ms)
-                await resolved.locator.wait_for(state="visible", timeout=timeout_ms)
+                await resolved.locator.wait_for(
+                    state="visible", timeout=self._remaining_ms(started, timeout_ms)
+                )
                 observed = f"present via {resolved.strategy}"
             elif condition.kind is ConditionKind.ELEMENT_ABSENT:
                 assert condition.target is not None
@@ -241,7 +259,8 @@ class PlaywrightSurfaceDriver:
                 else:
                     locator = self._page.locator("body")
                 await expect(locator).to_contain_text(
-                    re.compile(condition.pattern), timeout=timeout_ms
+                    re.compile(condition.pattern),
+                    timeout=self._remaining_ms(started, timeout_ms),
                 )
                 observed = "text pattern matched"
             return ConditionResult(
@@ -369,10 +388,10 @@ class PlaywrightSurfaceDriver:
             digest=hashlib.sha256(digest_payload).hexdigest(),
         )
 
-    async def operator_click(self, target: Target) -> ActionResult:
+    async def operator_click(self, target: Target, timeout_ms: int) -> ActionResult:
         """Execute a human-directed click without exposing the raw Playwright page."""
 
-        return await self.click(target)
+        return await self.click(target, timeout_ms)
 
     async def close(self) -> None:
         try:

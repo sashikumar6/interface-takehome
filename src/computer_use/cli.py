@@ -361,6 +361,7 @@ def handoff_demo(
                 await manager.operator_click(
                     driver,
                     Target(role="button", accessible_name="Commit sub-account"),
+                    timeout_ms=engine.pending_step_timeout_ms,
                     operator_id="fixture-operator",
                 )
             else:

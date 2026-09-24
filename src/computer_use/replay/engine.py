@@ -138,31 +138,41 @@ class ReplayEngine:
         parameters: dict[str, Any],
         *,
         timeout_ms: int,
-    ) -> tuple[str | None, FailureOutcome | None]:
+        success_condition: Condition | None = None,
+    ) -> tuple[str | None, FailureOutcome | None, bool | None]:
         declared: list[tuple[str, BusinessOutcome | FailureOutcome]] = [
             *(("business", item) for item in business_outcomes),
             *(("failure", item) for item in failure_outcomes),
         ]
-        if not declared:
-            return None, None
-        results = await asyncio.gather(
-            *(
+        probes = [
+            self.conditions.evaluate(
+                driver,
+                item.detection_condition.interpolate(parameters),
+                timeout_ms=timeout_ms,
+            )
+            for _, item in declared
+        ]
+        if success_condition is not None:
+            probes.append(
                 self.conditions.evaluate(
                     driver,
-                    item.detection_condition.interpolate(parameters),
+                    success_condition.interpolate(parameters),
                     timeout_ms=timeout_ms,
                 )
-                for _, item in declared
             )
-        )
-        for (kind, item), result in zip(declared, results, strict=True):
+        if not probes:
+            return None, None, None
+        results = await asyncio.gather(*probes)
+        declared_results = results[: len(declared)]
+        success_matched = results[-1].matched if success_condition is not None else None
+        for (kind, item), result in zip(declared, declared_results, strict=True):
             if result.matched and kind == "business":
-                return item.name, None
-        for (kind, item), result in zip(declared, results, strict=True):
+                return item.name, None, success_matched
+        for (kind, item), result in zip(declared, declared_results, strict=True):
             if result.matched and kind == "failure":
                 assert isinstance(item, FailureOutcome)
-                return None, item
-        return None, None
+                return None, item, success_matched
+        return None, None, success_matched
 
     async def _failure(
         self,
@@ -220,17 +230,17 @@ class ReplayEngine:
         if step.action is ActionType.NAVIGATE:
             assert step.value is not None
             value = interpolate_template(step.value, parameters, regex_escape=False)
-            result = await driver.navigate(value)
+            result = await driver.navigate(value, self._timeout_for(step))
         elif step.action is ActionType.CLICK:
             assert target is not None
-            result = await driver.click(target)
+            result = await driver.click(target, self._timeout_for(step))
         elif step.action is ActionType.TYPE:
             assert target is not None and step.value is not None
             value = interpolate_template(step.value, parameters, regex_escape=False)
-            result = await driver.type(target, value)
+            result = await driver.type(target, value, self._timeout_for(step))
         elif step.action is ActionType.READ:
             assert target is not None
-            result = await driver.read(target)
+            result = await driver.read(target, self._timeout_for(step))
             return result.locator_strategy, result.value
         else:
             assert step.checkpoint is not None
@@ -253,7 +263,7 @@ class ReplayEngine:
         attempt: int,
     ) -> ReplayResult | None:
         timeout_ms = self._timeout_for(step)
-        outcome, declared_failure = await self._declared_outcomes(
+        outcome, declared_failure, _ = await self._declared_outcomes(
             driver,
             state.capability.known_business_outcomes,
             state.capability.known_failure_outcomes,
@@ -434,12 +444,13 @@ class ReplayEngine:
                     )
 
         final_timeout = self._timeout_for(capability.steps[-1])
-        outcome, declared_failure = await self._declared_outcomes(
+        outcome, declared_failure, final_matched = await self._declared_outcomes(
             driver,
             capability.known_business_outcomes,
             capability.known_failure_outcomes,
             state.parameters,
             timeout_ms=final_timeout,
+            success_condition=capability.final_success_condition,
         )
         if outcome:
             return await self._capture_terminal(
@@ -460,12 +471,7 @@ class ReplayEngine:
                 message=declared_failure.description,
                 expected=declared_failure.detection_condition.model_dump(mode="json"),
             )
-        final = await self.conditions.evaluate(
-            driver,
-            capability.final_success_condition.interpolate(state.parameters),
-            timeout_ms=final_timeout,
-        )
-        if not final.matched:
+        if not final_matched:
             return await self._failure(
                 driver=driver,
                 step=capability.steps[-1],
@@ -579,6 +585,15 @@ class ReplayEngine:
         if index >= len(self._state.capability.steps):
             return self._state.capability.final_success_condition
         return self._state.capability.steps[index].checkpoint
+
+    @property
+    def pending_step_timeout_ms(self) -> int:
+        """Return the declared timeout for the step currently owned by a human."""
+
+        if self._state is None:
+            raise RuntimeError("there is no active replay step")
+        index = self._state.next_step_index
+        return self._timeout_for(self._state.capability.steps[index])
 
     async def resume(self, driver: SurfaceDriver) -> ReplayResult:
         """Continue a paused run after human control returns on the same driver."""

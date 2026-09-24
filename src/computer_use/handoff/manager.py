@@ -92,7 +92,12 @@ class HandoffManager:
         )
 
     async def operator_click(
-        self, driver: Any, target: Target, *, operator_id: str = "local-operator"
+        self,
+        driver: Any,
+        target: Target,
+        *,
+        timeout_ms: int,
+        operator_id: str = "local-operator",
     ) -> None:
         self._assert_same_session(driver)
         if self.owner is not ControlOwner.HUMAN:
@@ -100,7 +105,7 @@ class HandoffManager:
         operator_click = getattr(driver, "operator_click", None)
         if operator_click is None:
             raise RuntimeError("surface does not support local operator actions")
-        result = await operator_click(target)
+        result = await operator_click(target, timeout_ms)
         self.recorder.record_stream(
             "control-events",
             "human_action",

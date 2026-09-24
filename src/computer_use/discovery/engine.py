@@ -309,19 +309,19 @@ class DiscoveryEngine:
                 postcondition_matched: bool | None = None
                 if action_type is ActionType.NAVIGATE:
                     assert value is not None
-                    result = await driver.navigate(value)
+                    result = await driver.navigate(value, self.condition_timeout_ms)
                     read_value = None
                 elif action_type is ActionType.CLICK:
                     assert decision.target is not None
-                    result = await driver.click(decision.target)
+                    result = await driver.click(decision.target, self.condition_timeout_ms)
                     read_value = None
                 elif action_type is ActionType.TYPE:
                     assert decision.target is not None and value is not None
-                    result = await driver.type(decision.target, value)
+                    result = await driver.type(decision.target, value, self.condition_timeout_ms)
                     read_value = None
                 elif action_type is ActionType.READ:
                     assert decision.target is not None and decision.reads_into is not None
-                    result = await driver.read(decision.target)
+                    result = await driver.read(decision.target, self.condition_timeout_ms)
                     read_value = result.value
                     assert read_value is not None
                     reads[decision.reads_into] = read_value

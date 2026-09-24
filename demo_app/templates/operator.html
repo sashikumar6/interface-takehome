@@ -12,4 +12,15 @@
   </div>
   <p role="status">Committed synthetic sub-accounts this process: {{ committed_count }}</p>
   <p>The automation runner owns control state and writes the durable redacted control-event log.</p>
+
+  <h2>Repeated-control resolver fixture</h2>
+  <p>These synthetic rows exercise semantic container scope and explicit ordinals.</p>
+  <table class="legacy-grid">
+    <caption>Pending synthetic members</caption>
+    <thead><tr><th>Member</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td>Member 12345</td><td><a href="/operator?member=12345">Open member</a></td></tr>
+      <tr><td>Member 77777</td><td><a href="/operator?member=77777">Open member</a></td></tr>
+    </tbody>
+  </table>
 {% endblock %}

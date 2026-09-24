@@ -19,6 +19,7 @@ from computer_use.domain.models import (
     ConditionKind,
     ConditionResult,
     EvidenceRef,
+    FailureOutcome,
     Observation,
     OutputSpec,
     Provenance,
@@ -49,6 +50,7 @@ class ContractSurface:
         self.read_value = read_value
         self.wait_results = list(wait_results or [])
         self.clicks = 0
+        self.action_timeouts: list[int] = []
 
     async def current_url(self) -> str:
         return f"{ORIGIN}/fixture"
@@ -62,19 +64,23 @@ class ContractSurface:
             digest=hashlib.sha256(text.encode()).hexdigest(),
         )
 
-    async def navigate(self, url: str) -> ActionResult:
+    async def navigate(self, url: str, timeout_ms: int) -> ActionResult:
+        self.action_timeouts.append(timeout_ms)
         return ActionResult(success=True, locator_strategy="url", observed=url)
 
-    async def click(self, target: Target) -> ActionResult:
+    async def click(self, target: Target, timeout_ms: int) -> ActionResult:
+        self.action_timeouts.append(timeout_ms)
         self.clicks += 1
         if self.click_error is not None:
             raise self.click_error
         return ActionResult(success=True, locator_strategy="role+accessible_name")
 
-    async def type(self, target: Target, text: str) -> ActionResult:
+    async def type(self, target: Target, text: str, timeout_ms: int) -> ActionResult:
+        self.action_timeouts.append(timeout_ms)
         return ActionResult(success=True, locator_strategy="role+accessible_name")
 
-    async def read(self, target: Target) -> ReadResult:
+    async def read(self, target: Target, timeout_ms: int) -> ReadResult:
+        self.action_timeouts.append(timeout_ms)
         return ReadResult(
             success=True,
             value=self.read_value,
@@ -99,6 +105,7 @@ def artifact(
     *,
     outputs: tuple[OutputSpec, ...] = (),
     business_outcomes: tuple[BusinessOutcome, ...] = (),
+    failure_outcomes: tuple[FailureOutcome, ...] = (),
 ) -> CapabilityArtifact:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     return CapabilityArtifact(
@@ -115,6 +122,7 @@ def artifact(
         inputs=(),
         steps=(step,),
         known_business_outcomes=business_outcomes,
+        known_failure_outcomes=failure_outcomes,
         outputs=outputs,
         final_success_condition=Condition(
             kind=ConditionKind.ELEMENT_PRESENT,
@@ -237,12 +245,54 @@ async def test_business_outcome_precedes_coexisting_final_success(tmp_path: Path
                 ),
             ),
         ),
+        failure_outcomes=(
+            FailureOutcome(
+                name="permission_denied",
+                error_code="PERMISSION_DENIED",
+                description="Access denied.",
+                detection_condition=Condition(
+                    kind=ConditionKind.TEXT_MATCHES,
+                    pattern="Permission denied",
+                ),
+            ),
+        ),
     )
 
     result = await engine.run(capability, {}, ContractSurface())
 
     assert result.status is ReplayStatus.BUSINESS_OUTCOME
     assert result.business_outcome == "already_complete"
+
+
+@pytest.mark.asyncio
+async def test_declared_failure_precedes_coexisting_final_success(tmp_path: Path) -> None:
+    recorder = EvidenceRecorder(tmp_path, "replay", run_directory=tmp_path / "run")
+    engine = ReplayEngine(policy=PolicyEngine.development(ORIGIN), recorder=recorder)
+    capability = artifact(
+        Step(
+            id="click",
+            action=ActionType.CLICK,
+            target=Target(role="button", accessible_name="Continue"),
+            timeout_ms=200,
+        ),
+        failure_outcomes=(
+            FailureOutcome(
+                name="permission_denied",
+                error_code="PERMISSION_DENIED",
+                description="Access denied.",
+                detection_condition=Condition(
+                    kind=ConditionKind.TEXT_MATCHES,
+                    pattern="Permission denied",
+                ),
+            ),
+        ),
+    )
+
+    result = await engine.run(capability, {}, ContractSurface())
+
+    assert result.status is ReplayStatus.HARD_FAILURE
+    assert result.failure is not None
+    assert result.failure.error_code == "PERMISSION_DENIED"
 
 
 @pytest.mark.asyncio
@@ -274,3 +324,4 @@ async def test_idempotency_key_prevents_duplicate_action_during_checkpoint_retry
 
     assert result.status is ReplayStatus.SUCCESS
     assert surface.clicks == 1
+    assert surface.action_timeouts == [200]
