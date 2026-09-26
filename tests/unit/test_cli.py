@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from click import unstyle
 from typer.testing import CliRunner
 
 from computer_use.cli import app
@@ -26,4 +27,5 @@ def test_schema_export_and_example_generation_commands(tmp_path: Path) -> None:
 def test_replay_requires_exactly_one_artifact_selector() -> None:
     result = runner.invoke(app, ["replay"])
     assert result.exit_code != 0
-    assert "provide exactly one of --artifact or --capability-id" in result.output
+    rendered_output = " ".join(unstyle(result.output).split())
+    assert "provide exactly one of --artifact or --capability-id" in rendered_output
