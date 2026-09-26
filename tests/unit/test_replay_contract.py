@@ -5,6 +5,7 @@ import hashlib
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from time import monotonic
 
 import pytest
 
@@ -98,6 +99,24 @@ class ContractSurface:
 
     async def close(self) -> None:
         return None
+
+
+class TimedOutcomeSurface(ContractSurface):
+    def __init__(self, *, outcome_matched: bool) -> None:
+        super().__init__()
+        self.outcome_matched = outcome_matched
+        self.condition_timeouts: list[int] = []
+
+    async def wait_for(self, condition: Condition, timeout_ms: int) -> ConditionResult:
+        self.condition_timeouts.append(timeout_ms)
+        if condition.kind is ConditionKind.TEXT_MATCHES:
+            delay_ms = 75 if self.outcome_matched else timeout_ms
+            await asyncio.sleep(delay_ms / 1_000)
+            return ConditionResult(
+                matched=self.outcome_matched,
+                observed="outcome present" if self.outcome_matched else "outcome absent",
+            )
+        return ConditionResult(matched=True, observed="success present")
 
 
 def artifact(
@@ -293,6 +312,71 @@ async def test_declared_failure_precedes_coexisting_final_success(tmp_path: Path
     assert result.status is ReplayStatus.HARD_FAILURE
     assert result.failure is not None
     assert result.failure.error_code == "PERMISSION_DENIED"
+
+
+@pytest.mark.asyncio
+async def test_success_waits_only_for_short_outcome_probe(tmp_path: Path) -> None:
+    recorder = EvidenceRecorder(tmp_path, "replay", run_directory=tmp_path / "run")
+    engine = ReplayEngine(policy=PolicyEngine.development(ORIGIN), recorder=recorder)
+    capability = artifact(
+        Step(
+            id="click",
+            action=ActionType.CLICK,
+            target=Target(role="button", accessible_name="Continue"),
+            timeout_ms=1_000,
+            outcome_probe_timeout_ms=100,
+        ),
+        business_outcomes=(
+            BusinessOutcome(
+                name="already_complete",
+                description="The fixture was already complete.",
+                detection_condition=Condition(
+                    kind=ConditionKind.TEXT_MATCHES,
+                    pattern="Already complete",
+                ),
+            ),
+        ),
+    )
+    surface = TimedOutcomeSurface(outcome_matched=False)
+
+    started = monotonic()
+    result = await engine.run(capability, {}, surface)
+    elapsed = monotonic() - started
+
+    assert result.status is ReplayStatus.SUCCESS
+    assert 100 in surface.condition_timeouts
+    assert 1_000 in surface.condition_timeouts
+    assert elapsed < 0.4
+
+
+@pytest.mark.asyncio
+async def test_delayed_business_outcome_still_precedes_immediate_success(tmp_path: Path) -> None:
+    recorder = EvidenceRecorder(tmp_path, "replay", run_directory=tmp_path / "run")
+    engine = ReplayEngine(policy=PolicyEngine.development(ORIGIN), recorder=recorder)
+    capability = artifact(
+        Step(
+            id="click",
+            action=ActionType.CLICK,
+            target=Target(role="button", accessible_name="Continue"),
+            timeout_ms=1_000,
+            outcome_probe_timeout_ms=100,
+        ),
+        business_outcomes=(
+            BusinessOutcome(
+                name="already_complete",
+                description="The fixture was already complete.",
+                detection_condition=Condition(
+                    kind=ConditionKind.TEXT_MATCHES,
+                    pattern="Already complete",
+                ),
+            ),
+        ),
+    )
+
+    result = await engine.run(capability, {}, TimedOutcomeSurface(outcome_matched=True))
+
+    assert result.status is ReplayStatus.BUSINESS_OUTCOME
+    assert result.business_outcome == "already_complete"
 
 
 @pytest.mark.asyncio

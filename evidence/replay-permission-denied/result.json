@@ -65,7 +65,7 @@
         "path": "evidence/replay-permission-denied/observations/observation-001.png",
         "sha256": "5cdd8da8ff3061570ad723992a1fcae9b971373adf2c9f0bc8806275fce55b30"
       },
-      "timestamp": "2026-09-24T06:48:55.655573Z",
+      "timestamp": "2026-09-26T19:20:15.509829Z",
       "title": "Member Lookup Result | Heritage Community Bank",
       "url": "http://127.0.0.1:8765/members/***55",
       "visible_text": "HERITAGE COMMUNITY BANK Member Servicing Portal 4.2 Member search | Operator handoff DEMONSTRATION ONLY — every name, member ID, balance, and account is synthetic. Member lookup result Permission denied Your demo operator profile cannot view this fixture member. Return to member search Local training system. No authentication. No real financial data."
@@ -76,7 +76,7 @@
   },
   "intervention_request_id": null,
   "outputs": null,
-  "run_id": "replay-acf47acc224d45beb217f8ac77d3c1cb",
+  "run_id": "replay-cf5637ca53f84c11b0b32821b7e41eaa",
   "safe_details": null,
   "status": "hard_failure"
 }

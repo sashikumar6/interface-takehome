@@ -109,6 +109,9 @@ class ReplayEngine:
             return step.timeout_ms
         return min(step.timeout_ms, self.step_timeout_ms)
 
+    def _outcome_timeout_for(self, step: Step) -> int:
+        return min(step.outcome_probe_timeout_ms, self._timeout_for(step))
+
     async def _capture_terminal(
         self, driver: SurfaceDriver, result: ReplayResult, observation: Any | None = None
     ) -> ReplayResult:
@@ -137,42 +140,84 @@ class ReplayEngine:
         failure_outcomes: tuple[FailureOutcome, ...],
         parameters: dict[str, Any],
         *,
-        timeout_ms: int,
+        outcome_timeout_ms: int,
         success_condition: Condition | None = None,
+        success_timeout_ms: int | None = None,
     ) -> tuple[str | None, FailureOutcome | None, bool | None]:
         declared: list[tuple[str, BusinessOutcome | FailureOutcome]] = [
             *(("business", item) for item in business_outcomes),
             *(("failure", item) for item in failure_outcomes),
         ]
-        probes = [
-            self.conditions.evaluate(
-                driver,
-                item.detection_condition.interpolate(parameters),
-                timeout_ms=timeout_ms,
+        task_metadata: dict[
+            asyncio.Task[Any], tuple[str, BusinessOutcome | FailureOutcome | None]
+        ] = {}
+        for kind, item in declared:
+            task = asyncio.create_task(
+                self.conditions.evaluate(
+                    driver,
+                    item.detection_condition.interpolate(parameters),
+                    timeout_ms=outcome_timeout_ms,
+                )
             )
-            for _, item in declared
-        ]
+            task_metadata[task] = (kind, item)
+        success_task: asyncio.Task[Any] | None = None
         if success_condition is not None:
-            probes.append(
+            success_task = asyncio.create_task(
                 self.conditions.evaluate(
                     driver,
                     success_condition.interpolate(parameters),
-                    timeout_ms=timeout_ms,
+                    timeout_ms=success_timeout_ms or outcome_timeout_ms,
                 )
             )
-        if not probes:
+            task_metadata[success_task] = ("success", None)
+        if not task_metadata:
             return None, None, None
-        results = await asyncio.gather(*probes)
-        declared_results = results[: len(declared)]
-        success_matched = results[-1].matched if success_condition is not None else None
-        for (kind, item), result in zip(declared, declared_results, strict=True):
-            if result.matched and kind == "business":
-                return item.name, None, success_matched
-        for (kind, item), result in zip(declared, declared_results, strict=True):
-            if result.matched and kind == "failure":
-                assert isinstance(item, FailureOutcome)
-                return None, item, success_matched
-        return None, None, success_matched
+
+        pending = set(task_metadata)
+        completed: set[asyncio.Task[Any]] = set()
+
+        def classification() -> tuple[str | None, FailureOutcome | None, bool | None]:
+            success_matched = (
+                success_task.result().matched
+                if success_task is not None and success_task in completed
+                else None
+            )
+            for task, (kind, item) in task_metadata.items():
+                if task in completed and kind == "business" and task.result().matched:
+                    assert isinstance(item, BusinessOutcome)
+                    return item.name, None, success_matched
+            for task, (kind, item) in task_metadata.items():
+                if task in completed and kind == "failure" and task.result().matched:
+                    assert isinstance(item, FailureOutcome)
+                    return None, item, success_matched
+            return None, None, success_matched
+
+        try:
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                completed.update(done)
+                outcome, failure, success_matched = classification()
+                terminal_seen = (
+                    outcome is not None or failure is not None or success_matched is True
+                )
+                if terminal_seen:
+                    pending_outcomes = {
+                        task
+                        for task in pending
+                        if task_metadata[task][0] in {"business", "failure"}
+                    }
+                    if outcome is None and pending_outcomes:
+                        grace_done, _ = await asyncio.wait(pending_outcomes)
+                        completed.update(grace_done)
+                        pending.difference_update(grace_done)
+                        outcome, failure, success_matched = classification()
+                    return outcome, failure, success_matched
+            return classification()
+        finally:
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
 
     async def _failure(
         self,
@@ -262,13 +307,13 @@ class ReplayEngine:
         index: int,
         attempt: int,
     ) -> ReplayResult | None:
-        timeout_ms = self._timeout_for(step)
+        timeout_ms = self._outcome_timeout_for(step)
         outcome, declared_failure, _ = await self._declared_outcomes(
             driver,
             state.capability.known_business_outcomes,
             state.capability.known_failure_outcomes,
             state.parameters,
-            timeout_ms=timeout_ms,
+            outcome_timeout_ms=timeout_ms,
         )
         if outcome:
             return await self._capture_terminal(
@@ -443,14 +488,16 @@ class ReplayEngine:
                         retry_count=attempt - 1,
                     )
 
-        final_timeout = self._timeout_for(capability.steps[-1])
+        final_step = capability.steps[-1]
+        final_timeout = self._timeout_for(final_step)
         outcome, declared_failure, final_matched = await self._declared_outcomes(
             driver,
             capability.known_business_outcomes,
             capability.known_failure_outcomes,
             state.parameters,
-            timeout_ms=final_timeout,
+            outcome_timeout_ms=self._outcome_timeout_for(final_step),
             success_condition=capability.final_success_condition,
+            success_timeout_ms=final_timeout,
         )
         if outcome:
             return await self._capture_terminal(

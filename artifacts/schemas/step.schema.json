@@ -305,6 +305,13 @@
       "default": null,
       "title": "Idempotency Key"
     },
+    "outcome_probe_timeout_ms": {
+      "default": 100,
+      "maximum": 5000,
+      "minimum": 50,
+      "title": "Outcome Probe Timeout Ms",
+      "type": "integer"
+    },
     "precondition": {
       "anyOf": [
         {

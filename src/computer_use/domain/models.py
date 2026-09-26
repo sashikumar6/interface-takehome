@@ -326,6 +326,7 @@ class Step(StrictModel):
     value: str | None = None
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
     timeout_ms: int = Field(default=5_000, ge=100, le=120_000)
+    outcome_probe_timeout_ms: int = Field(default=100, ge=50, le=5_000)
     precondition: Condition | None = None
     checkpoint: Condition | None = None
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
